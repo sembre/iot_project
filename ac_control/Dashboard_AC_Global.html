@@ -1,0 +1,1303 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Global AC Control Dashboard</title>
+    <!-- Pustaka MQTT dimuat dari BERKAS LOKAL di folder yang sama, bukan dari
+         internet. Kalau file ini hilang, halaman otomatis jatuh ke CDN (lihat
+         muatPaho() di bawah). Dulu satu-satunya sumber adalah CDN: begitu CDN
+         tidak terjangkau (diblokir jaringan kantor / sedang gangguan), baris
+         `new Paho.MQTT.Client(...)` langsung melempar error di awal skrip dan
+         SELURUH halaman mati total tanpa pesan apa pun - layar kosong. -->
+    <script src="lib/paho-mqtt.lib.js"></script>
+    <style>
+        /* =====================================================================
+           SISTEM VISUAL - tema "ruang kendali" gelap
+           Warna dipilih supaya STATUS bisa dibaca sekilas tanpa membaca teks:
+             biru-sian menyala = AC hidup (sekaligus terasa "dingin"/pendingin)
+             abu redup        = AC mati
+             kuning berdenyut = perintah sedang dikirim, belum dijawab alat
+             merah            = alat offline / gagal
+           ===================================================================== */
+        :root{
+            --latar:        #0b1120;
+            --kartu:        rgba(255,255,255,.045);
+            --kartu-hover:  rgba(255,255,255,.065);
+            --garis:        rgba(255,255,255,.09);
+            --garis-terang: rgba(255,255,255,.16);
+            --teks:         #e2e8f0;
+            --redup:        #94a3b8;
+            --sangat-redup: #64748b;
+            --dingin:       #22d3ee;
+            --dingin-tua:   #0891b2;
+            --hijau:        #34d399;
+            --kuning:       #fbbf24;
+            --merah:        #f87171;
+            --ungu:         #818cf8;
+        }
+
+        *{ box-sizing: border-box; }
+
+        body{
+            font-family: 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', sans-serif;
+            color: var(--teks);
+            background: var(--latar);
+            margin: 0;
+            padding: 0 20px 60px;
+            min-height: 100vh;
+            /* Dua cahaya lembut di belakang - bikin latar tidak terasa "papan hitam mati" */
+            background-image:
+                radial-gradient(900px 500px at 12% -8%,  rgba(34,211,238,.13), transparent 60%),
+                radial-gradient(800px 500px at 88% 4%,   rgba(129,140,248,.13), transparent 60%);
+            background-attachment: fixed;
+        }
+
+        /* ============================ KEPALA HALAMAN ============================ */
+        .topbar{
+            max-width: 1280px; margin: 0 auto; padding: 26px 0 18px;
+            display: flex; align-items: center; justify-content: space-between;
+            gap: 16px; flex-wrap: wrap;
+        }
+        .merek{ display: flex; align-items: center; gap: 14px; }
+        .merek-ikon{
+            width: 46px; height: 46px; border-radius: 14px; flex-shrink: 0;
+            display: grid; place-items: center;
+            background: linear-gradient(145deg, rgba(34,211,238,.22), rgba(129,140,248,.22));
+            border: 1px solid var(--garis-terang);
+            box-shadow: 0 6px 20px rgba(34,211,238,.16);
+        }
+        .merek-ikon svg{ width: 24px; height: 24px; stroke: var(--dingin); stroke-width: 1.9; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+        h1{
+            font-size: 22px; margin: 0; font-weight: 700; letter-spacing: -.2px;
+            background: linear-gradient(90deg, #e2e8f0, #67e8f9);
+            -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+        }
+        p.subtitle{ color: var(--redup); margin: 3px 0 0; font-size: 13px; }
+
+        /* Status koneksi - dulu kotak merah melayang di pojok, sekarang menyatu di kepala */
+        #conn-status{
+            display: inline-flex; align-items: center; gap: 8px;
+            padding: 9px 15px; border-radius: 99px; font-size: 12.5px; font-weight: 600;
+            border: 1px solid var(--garis-terang); background: var(--kartu);
+            backdrop-filter: blur(10px); color: var(--redup); transition: .3s;
+        }
+        #conn-status::before{
+            content: ''; width: 8px; height: 8px; border-radius: 50%;
+            background: var(--merah); flex-shrink: 0;
+            animation: denyut-titik 1.4s ease-in-out infinite;
+        }
+        #conn-status.tersambung{ color: var(--hijau); border-color: rgba(52,211,153,.35); background: rgba(52,211,153,.08); }
+        #conn-status.tersambung::before{ background: var(--hijau); animation: none; box-shadow: 0 0 0 4px rgba(52,211,153,.18); }
+        #conn-status.putus{ color: var(--merah); border-color: rgba(248,113,113,.35); background: rgba(248,113,113,.08); }
+
+        @keyframes denyut-titik{ 0%,100%{ opacity:1 } 50%{ opacity:.25 } }
+
+        /* ============================ RINGKASAN ============================ */
+        .ringkas{
+            max-width: 1280px; margin: 0 auto 26px;
+            display: flex; gap: 12px; flex-wrap: wrap;
+        }
+        .ringkas .angka-box{
+            flex: 1; min-width: 130px;
+            background: var(--kartu); border: 1px solid var(--garis);
+            border-radius: 14px; padding: 13px 16px; backdrop-filter: blur(10px);
+        }
+        .ringkas .angka{ font-size: 26px; font-weight: 700; line-height: 1.1; font-variant-numeric: tabular-nums; }
+        .ringkas .label{ font-size: 11px; color: var(--sangat-redup); text-transform: uppercase; letter-spacing: .7px; margin-top: 3px; }
+        .angka.nyala{ color: var(--dingin); }
+        .angka.online{ color: var(--hijau); }
+        .angka.offline{ color: var(--merah); }
+
+        /* ============================ KARTU AC ============================ */
+        #ac-container{
+            max-width: 1280px; margin: 0 auto;
+            display: grid; gap: 20px;
+            grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+            align-items: start;
+        }
+
+        .ac-card{
+            position: relative; overflow: hidden;
+            background: var(--kartu); border: 1px solid var(--garis);
+            border-radius: 20px; padding: 20px; text-align: left;
+            backdrop-filter: blur(14px);
+            box-shadow: 0 10px 34px rgba(0,0,0,.34);
+            transition: border-color .3s, transform .3s, box-shadow .3s;
+        }
+        .ac-card:hover{ border-color: var(--garis-terang); transform: translateY(-3px); box-shadow: 0 16px 44px rgba(0,0,0,.44); }
+
+        /* Ikon garis - satu bahasa visual dengan ikon merek di kepala halaman.
+           Menggantikan emoji berwarna yang bentrok dengan tema. */
+        .ikon-sec{ width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.9;
+                   stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0; }
+        .ikon-aksi{ width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.8;
+                    stroke-linecap: round; stroke-linejoin: round; }
+        .judul-blok{ display: inline-flex; align-items: center; gap: 7px; }
+        /* Garis tipis di bibir atas kartu: ikut menyala kalau AC-nya hidup,
+           jadi dari jauh pun kelihatan kartu mana yang ACnya nyala. */
+        .ac-card::before{
+            content: ''; position: absolute; inset: 0 0 auto 0; height: 2px;
+            background: linear-gradient(90deg, transparent, var(--garis-terang), transparent);
+            transition: .45s;
+        }
+        .ac-card.hidup::before{ background: linear-gradient(90deg, transparent, var(--dingin), transparent); box-shadow: 0 0 18px rgba(34,211,238,.6); }
+        /* Alat OFFLINE: kartu diredupkan DAN saklarnya dipudarkan warnanya.
+           Penting supaya tidak menipu - saklar biru menyala terang di alat yang
+           sudah offline seolah-olah itu keadaan sekarang, padahal itu cuma data
+           terakhir sebelum alat hilang. */
+        .ac-card.lepas{ opacity: .62; }
+        .ac-card.lepas::before{ background: linear-gradient(90deg, transparent, var(--merah), transparent); box-shadow: none; }
+        .ac-card.lepas .saklar{ filter: grayscale(.75); pointer-events: auto; }
+        .ac-card.lepas .saklar .sw-track{ box-shadow: inset 0 2px 7px rgba(0,0,0,.55); }
+
+        .ac-title{
+            font-size: 17px; font-weight: 700; color: #f1f5f9; margin-bottom: 10px;
+            display: flex; align-items: center; justify-content: space-between; gap: 8px;
+            text-align: left; line-height: 1.3;
+        }
+        .action-icons{ font-size: 14px; display: inline-flex; gap: 4px; flex-shrink: 0; }
+        .action-icons span{
+            cursor: pointer; opacity: .45; transition: .2s; user-select: none;
+            width: 27px; height: 27px; border-radius: 8px; display: grid; place-items: center;
+        }
+        .action-icons span:hover{ opacity: 1; background: rgba(255,255,255,.09); }
+
+        .device-status{
+            font-size: 10.5px; font-weight: 700; letter-spacing: .5px;
+            padding: 4px 10px; border-radius: 99px; display: inline-flex; align-items: center; gap: 6px;
+            transition: .3s; border: 1px solid transparent;
+        }
+        .status-online{ background: rgba(52,211,153,.12); color: var(--hijau); border-color: rgba(52,211,153,.3); }
+        .status-offline{ background: rgba(248,113,113,.12); color: var(--merah); border-color: rgba(248,113,113,.3); }
+
+        /* Jam besar - angka rata lebar (tabular) supaya tidak "goyang" tiap detik */
+        .ac-time{
+            font-size: 34px; font-weight: 700; color: #f8fafc; margin: 14px 0 6px;
+            text-align: center; letter-spacing: 1.5px;
+            font-variant-numeric: tabular-nums;
+            font-family: 'SF Mono', 'Cascadia Mono', Consolas, monospace;
+            text-shadow: 0 0 26px rgba(34,211,238,.28);
+            transition: color .3s;
+        }
+        .ac-time.mati{ color: var(--merah); text-shadow: none; }
+
+        .ac-stats{
+            font-size: 12px; color: var(--redup); text-align: center;
+            background: rgba(0,0,0,.22); border: 1px solid var(--garis);
+            padding: 8px; border-radius: 10px; margin-bottom: 16px;
+        }
+
+        /* ======================= SAKLAR NYALA/MATI (inti) ======================= */
+        .saklar{
+            display: flex; align-items: center; gap: 14px; width: 100%;
+            background: linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.015));
+            border: 1px solid var(--garis); border-radius: 16px;
+            padding: 13px 15px; margin: 0; cursor: pointer; text-align: left;
+            transition: border-color .25s, transform .15s, background .25s;
+            font-family: inherit;
+        }
+        .saklar:hover{ border-color: rgba(34,211,238,.45); background: rgba(34,211,238,.05); }
+        .saklar:active{ transform: scale(.988); }
+        .saklar:focus-visible{ outline: 2px solid var(--dingin); outline-offset: 3px; }
+
+        .sw-track{
+            position: relative; flex-shrink: 0; width: 68px; height: 36px; border-radius: 99px;
+            background: #1e293b; border: 1px solid rgba(255,255,255,.13);
+            box-shadow: inset 0 2px 7px rgba(0,0,0,.55);
+            transition: background .4s, box-shadow .4s, border-color .4s;
+        }
+        .sw-knob{
+            position: absolute; top: 3px; left: 3px; width: 28px; height: 28px; border-radius: 50%;
+            background: linear-gradient(180deg, #f8fafc, #cbd5e1);
+            display: grid; place-items: center;
+            box-shadow: 0 2px 7px rgba(0,0,0,.5);
+            transition: transform .4s cubic-bezier(.34,1.35,.64,1);
+        }
+        .sw-ico{
+            width: 15px; height: 15px; fill: none; stroke: #64748b; stroke-width: 2.6;
+            stroke-linecap: round; transition: stroke .3s;
+        }
+
+        .sw-teks{ display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+        .sw-teks b{ font-size: 14.5px; font-weight: 700; color: var(--redup); letter-spacing: .3px; transition: color .3s; }
+        .sw-teks small{ font-size: 11px; color: var(--sangat-redup); }
+
+        /* -- keadaan HIDUP -- */
+        .saklar.on{ border-color: rgba(34,211,238,.4); background: rgba(34,211,238,.07); }
+        .saklar.on .sw-track{
+            background: linear-gradient(90deg, var(--dingin-tua), var(--dingin));
+            border-color: rgba(34,211,238,.6);
+            box-shadow: 0 0 20px rgba(34,211,238,.45), inset 0 1px 2px rgba(255,255,255,.25);
+        }
+        .saklar.on .sw-knob{ transform: translateX(32px); }
+        .saklar.on .sw-ico{ stroke: var(--dingin-tua); }
+        .saklar.on .sw-teks b{ color: #67e8f9; }
+
+        /* -- keadaan MENUNGGU JAWABAN ALAT --
+           Knop berhenti di TENGAH: jujur menggambarkan "perintah sudah dikirim,
+           tapi alat belum mengonfirmasi" - bukan berpura-pura sudah berhasil. */
+        .saklar.nunggu .sw-track{
+            background: linear-gradient(90deg, #b45309, var(--kuning));
+            border-color: rgba(251,191,36,.55);
+            animation: denyut-saklar 1.1s ease-in-out infinite;
+        }
+        .saklar.nunggu .sw-knob{ transform: translateX(16px); }
+        .saklar.nunggu .sw-ico{ stroke: #92400e; }
+        .saklar.nunggu .sw-teks b{ color: var(--kuning); }
+        @keyframes denyut-saklar{
+            0%,100%{ box-shadow: 0 0 0 0 rgba(251,191,36,.5); }
+            50%    { box-shadow: 0 0 0 7px rgba(251,191,36,0); }
+        }
+
+        /* ============================ BLOK LIPAT ============================ */
+        details.blok{
+            margin-top: 16px; background: rgba(0,0,0,.2);
+            border: 1px solid var(--garis); border-radius: 14px; overflow: hidden;
+        }
+        details.blok > summary{
+            cursor: pointer; list-style: none; padding: 11px 14px;
+            font-size: 12px; font-weight: 700; color: var(--redup);
+            display: flex; align-items: center; justify-content: space-between; gap: 8px;
+            user-select: none; transition: .2s;
+        }
+        details.blok > summary::-webkit-details-marker{ display: none; }
+        details.blok > summary:hover{ background: rgba(255,255,255,.04); color: var(--teks); }
+        details.blok > summary .panah{ transition: transform .25s; opacity: .55; font-size: 10px; }
+        details.blok[open] > summary .panah{ transform: rotate(90deg); }
+        details.blok > summary .hitung{ font-weight: 500; color: var(--sangat-redup); font-size: 11px; margin-left: auto; margin-right: 6px; }
+        .blok-isi{ padding: 4px 12px 12px; }
+
+        /* ============================ JADWAL ============================ */
+        .sched-row{
+            display: flex; flex-direction: column; margin: 7px 0; padding: 10px;
+            background: rgba(255,255,255,.035); border-radius: 10px;
+            border-left: 3px solid var(--ungu); font-size: 12.5px;
+            transition: border-color .25s;
+        }
+        .sched-row:hover{ border-left-color: var(--dingin); }
+        .sched-row strong{ color: var(--teks); }
+        .time-box{ color: var(--redup); font-size: 11px; display: flex; align-items: center; gap: 3px; }
+        .time-box input{
+            width: 36px; padding: 4px; border-radius: 6px; text-align: center;
+            background: rgba(0,0,0,.42); border: 1px solid var(--garis-terang);
+            color: var(--teks); font-size: 12px; transition: .2s; font-family: inherit;
+        }
+        .time-box input:focus{ border-color: var(--dingin); outline: none; box-shadow: 0 0 0 3px rgba(34,211,238,.18); }
+        input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer-spin-button{ -webkit-appearance: none; margin: 0; }
+
+        .days-box{
+            display: flex; justify-content: space-between; font-size: 11px; margin-top: 9px;
+            color: var(--redup); background: rgba(0,0,0,.3); padding: 6px;
+            border-radius: 8px; border: 1px solid var(--garis);
+        }
+        .days-box label{ display: flex; align-items: center; gap: 3px; cursor: pointer; transition: color .2s; }
+        .days-box label:hover{ color: var(--teks); }
+        .days-box input{ margin: 0; cursor: pointer; accent-color: var(--dingin); }
+        input[type=checkbox]{ accent-color: var(--dingin); }
+
+        /* ============================ TOMBOL ============================ */
+        button{
+            width: 100%; padding: 10px; border: none; border-radius: 10px;
+            font-size: 13px; font-weight: 600; cursor: pointer; transition: .2s;
+            margin-top: 6px; font-family: inherit;
+        }
+        button:disabled{ opacity: .55; cursor: default; }
+        .btn-save{
+            background: rgba(52,211,153,.12); color: var(--hijau);
+            border: 1px solid rgba(52,211,153,.3); cursor: default; font-size: 12px;
+        }
+
+        /* ============================ UNDUH LOG ============================ */
+        .card-log-inputs{ display: flex; gap: 6px; margin-bottom: 7px; }
+        .card-log-inputs input{
+            width: 50%; padding: 7px; border-radius: 8px; font-size: 11.5px;
+            background: rgba(0,0,0,.42); border: 1px solid var(--garis-terang);
+            color: var(--teks); font-family: inherit;
+        }
+        .card-log-inputs input:focus{ border-color: var(--dingin); outline: none; }
+        .card-btn-group{ display: flex; gap: 6px; }
+        .card-btn-group button{ font-size: 11.5px; padding: 8px; margin: 0; }
+        .btn-card-blue{ background: rgba(34,211,238,.13); color: var(--dingin); border: 1px solid rgba(34,211,238,.3); }
+        .btn-card-blue:hover{ background: rgba(34,211,238,.22); }
+        .btn-card-green{ background: rgba(52,211,153,.13); color: var(--hijau); border: 1px solid rgba(52,211,153,.3); }
+        .btn-card-green:hover{ background: rgba(52,211,153,.22); }
+
+        /* ================= PANEL WIFI CADANGAN ================= */
+        .wifi-box{ margin-top: 16px; background: rgba(129,140,248,.07); padding: 12px; border-radius: 14px; border: 1px solid rgba(129,140,248,.22); }
+        .wifi-head{ font-size: 12px; font-weight: 700; color: #a5b4fc; display: flex; justify-content: space-between; align-items: center; margin-bottom: 9px; }
+        .wifi-aktif{
+            font-size: 12.5px; background: rgba(0,0,0,.28); border: 1px solid var(--garis);
+            border-radius: 10px; padding: 8px 10px;
+            display: flex; justify-content: space-between; align-items: center; gap: 8px;
+        }
+        .wifi-aktif .nama{ font-weight: 600; color: #c7d2fe; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .sinyal{ display: inline-flex; align-items: flex-end; gap: 2px; height: 14px; }
+        .sinyal i{ width: 3px; background: rgba(255,255,255,.16); border-radius: 1px; display: block; }
+        .sinyal i:nth-child(1){ height: 4px } .sinyal i:nth-child(2){ height: 7px }
+        .sinyal i:nth-child(3){ height: 10px } .sinyal i:nth-child(4){ height: 13px }
+        .sinyal i.on{ background: var(--hijau); }
+        .sinyal.lemah i.on{ background: var(--kuning); }
+        .sinyal.buruk i.on{ background: var(--merah); }
+        .rssi-txt{ font-size: 10.5px; color: var(--sangat-redup); white-space: nowrap; }
+
+        .wifi-daftar{ list-style: none; padding: 0; margin: 9px 0 0; }
+        .wifi-daftar li{
+            display: flex; justify-content: space-between; align-items: center; font-size: 12px;
+            background: rgba(0,0,0,.22); border: 1px solid var(--garis);
+            border-radius: 9px; padding: 6px 10px; margin-bottom: 5px; color: var(--redup);
+        }
+        .wifi-daftar li .ssid{ overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .wifi-daftar li .kini{ font-size: 9.5px; background: rgba(52,211,153,.16); color: var(--hijau); border-radius: 4px; padding: 2px 6px; margin-left: 6px; }
+        .wifi-hapus{ cursor: pointer; color: var(--merah); font-weight: bold; opacity: .55; padding: 0 4px; user-select: none; transition: .2s; }
+        .wifi-hapus:hover{ opacity: 1; }
+        .wifi-kosong{ font-size: 11.5px; color: var(--sangat-redup); font-style: italic; padding: 6px 2px; display: block; line-height: 1.5; }
+
+        .wifi-aksi{ display: flex; gap: 6px; margin-top: 9px; }
+        .wifi-aksi button{ font-size: 11px; padding: 7px; margin: 0; }
+        .btn-wifi-add{ background: rgba(129,140,248,.16); color: #a5b4fc; border: 1px solid rgba(129,140,248,.35); }
+        .btn-wifi-add:hover{ background: rgba(129,140,248,.26); }
+        .btn-wifi-scan{ background: rgba(255,255,255,.06); color: var(--redup); border: 1px solid var(--garis-terang); }
+        .btn-wifi-scan:hover{ background: rgba(255,255,255,.1); }
+
+        .wifi-form{ margin-top: 9px; background: rgba(0,0,0,.26); border: 1px solid var(--garis); border-radius: 12px; padding: 10px; }
+        .wifi-form input[type=text], .wifi-form input[type=password]{
+            width: 100%; padding: 8px; border-radius: 8px; font-size: 12px; margin-bottom: 7px;
+            background: rgba(0,0,0,.42); border: 1px solid var(--garis-terang);
+            color: var(--teks); font-family: inherit;
+        }
+        .wifi-form input:focus{ border-color: var(--ungu); outline: none; box-shadow: 0 0 0 3px rgba(129,140,248,.16); }
+        .wifi-form input::placeholder{ color: var(--sangat-redup); }
+        .wifi-form label.baris{ display: flex; align-items: center; gap: 7px; font-size: 11px; color: var(--redup); margin-bottom: 7px; cursor: pointer; }
+        .wifi-jalur{ display: flex; gap: 6px; margin-bottom: 7px; }
+        .wifi-jalur button{
+            font-size: 11px; padding: 7px; margin: 0;
+            background: rgba(255,255,255,.05); color: var(--redup); border: 1px solid var(--garis-terang);
+        }
+        .wifi-jalur button.aktif{ background: rgba(129,140,248,.24); color: #c7d2fe; border-color: rgba(129,140,248,.55); }
+        .wifi-warn{
+            font-size: 11px; background: rgba(251,191,36,.1); border: 1px solid rgba(251,191,36,.3);
+            color: #fcd34d; border-radius: 9px; padding: 9px; margin-bottom: 7px; line-height: 1.55;
+        }
+        .wifi-warn code{ background: rgba(0,0,0,.4); padding: 1px 4px; border-radius: 3px; font-size: 10.5px; }
+        .wifi-pesan{ font-size: 11px; margin-top: 7px; padding: 8px; border-radius: 8px; display: none; line-height: 1.55; }
+        .wifi-pesan.ok{ display: block; background: rgba(52,211,153,.12); color: var(--hijau); border: 1px solid rgba(52,211,153,.28); }
+        .wifi-pesan.err{ display: block; background: rgba(248,113,113,.12); color: var(--merah); border: 1px solid rgba(248,113,113,.28); }
+        .wifi-pesan.info{ display: block; background: rgba(255,255,255,.06); color: var(--redup); border: 1px solid var(--garis); }
+        .wifi-scan-hasil{ max-height: 128px; overflow-y: auto; margin-bottom: 7px; border-radius: 8px; }
+        .wifi-scan-hasil div{
+            font-size: 11px; padding: 6px 8px; border-bottom: 1px solid var(--garis);
+            cursor: pointer; display: flex; justify-content: space-between; gap: 8px;
+            color: var(--redup); transition: .15s;
+        }
+        .wifi-scan-hasil div:hover{ background: rgba(129,140,248,.14); color: var(--teks); }
+
+        /* ============================ KOSONG ============================ */
+        #kosong{
+            max-width: 560px; margin: 60px auto; text-align: center;
+            color: var(--sangat-redup); font-size: 14px; line-height: 1.7;
+        }
+        #kosong .ikon{ font-size: 44px; opacity: .35; display: block; margin-bottom: 12px; }
+
+        /* ============================ LAYAR KECIL ============================ */
+        @media (max-width: 560px){
+            body{ padding: 0 12px 40px; }
+            .topbar{ padding: 18px 0 14px; }
+            #ac-container{ grid-template-columns: 1fr; gap: 14px; }
+            .ac-card{ padding: 16px; border-radius: 16px; }
+            .ac-time{ font-size: 29px; }
+            h1{ font-size: 19px; }
+        }
+
+        /* Hormati pengguna yang mematikan animasi di sistemnya */
+        @media (prefers-reduced-motion: reduce){
+            *{ animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+        }
+    </style>
+</head>
+<body>
+    <div class="topbar">
+        <div class="merek">
+            <div class="merek-ikon">
+                <!-- Ikon unit AC: kotak indoor + tiga embusan udara -->
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <rect x="2.5" y="4" width="19" height="8" rx="2.2"/>
+                    <path d="M6 8.2h12"/>
+                    <path d="M7 15.5c0 1.6 1.4 1.6 1.4 3.2"/>
+                    <path d="M12 15.5c0 1.6 1.4 1.6 1.4 3.2"/>
+                    <path d="M17 15.5c0 1.6 1.4 1.6 1.4 3.2"/>
+                </svg>
+            </div>
+            <div>
+                <h1>Global AC Dashboard</h1>
+                <p class="subtitle">Pantau &amp; kendalikan semua AC dari jarak jauh</p>
+            </div>
+        </div>
+        <div id="conn-status">Menghubungkan ke Server...</div>
+    </div>
+
+    <div class="ringkas">
+        <div class="angka-box"><div class="angka" id="r_total">0</div><div class="label">Total Unit</div></div>
+        <div class="angka-box"><div class="angka nyala" id="r_nyala">0</div><div class="label">AC Menyala</div></div>
+        <div class="angka-box"><div class="angka online" id="r_online">0</div><div class="label">Online</div></div>
+        <div class="angka-box"><div class="angka offline" id="r_offline">0</div><div class="label">Offline</div></div>
+    </div>
+
+    <div id="ac-container"></div>
+
+    <div id="kosong">
+        <span class="ikon">📡</span>
+        Belum ada perangkat yang melapor.<br>
+        Panel AC muncul sendiri begitu alat menyala dan tersambung ke internet.
+    </div>
+
+    <script>
+        const broker = "broker.emqx.io";
+        const port = 8084; 
+        const clientId = "DashboardWeb_" + Math.random().toString(16).substr(2, 8);
+
+        // Klien MQTT SENGAJA belum dibuat di sini. Dulu barisnya langsung
+        // `new Paho.MQTT.Client(...)` di awal skrip - kalau pustakanya gagal
+        // dimuat, baris itu melempar ReferenceError dan semua kode di
+        // bawahnya (seluruh dashboard) tidak pernah jalan sama sekali.
+        // Sekarang pembuatannya ditunda sampai pustakanya dipastikan ada,
+        // lihat muatPaho() & mulaiAplikasi() di bagian paling bawah.
+        let client = null;
+        let PAHO = null;      // penunjuk ke namespace pustaka yang benar-benar terpakai
+
+        // Dipakai menggantikan client.isConnected() yang lama: aman dipanggil
+        // walaupun pustaka gagal dimuat / klien belum sempat dibuat.
+        function klienSiap() {
+            try { return !!(client && client.isConnected()); } catch (e) { return false; }
+        }
+
+        const baseTopic = "agus_smart_ac/+/status";
+        const scanTopic = "agus_smart_ac/+/wifi_scan";   // balasan hasil pindai WiFi alat
+        // Ikon garis sebagai pengganti emoji berwarna - satu gaya dengan ikon
+        // merek di kepala halaman, dan warnanya ikut warna teks induknya
+        // (stroke: currentColor), jadi otomatis serasi di setiap blok.
+        const IKON = {
+            wifi:  '<svg class="ikon-sec" viewBox="0 0 24 24" aria-hidden="true"><path d="M1.8 8.6a15 15 0 0 1 20.4 0"/><path d="M5.2 12.4a10 10 0 0 1 13.6 0"/><path d="M8.6 16.2a5 5 0 0 1 6.8 0"/><circle cx="12" cy="19.8" r="1.1" fill="currentColor" stroke="none"/></svg>',
+            jam:   '<svg class="ikon-sec" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="13.5" r="7.5"/><path d="M12 9.5v4l2.6 1.6"/><path d="M4.7 3.6 2.4 5.6"/><path d="M19.3 3.6l2.3 2"/></svg>',
+            unduh: '<svg class="ikon-sec" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5v11"/><path d="M7.8 10.3 12 14.5l4.2-4.2"/><path d="M4 19.5h16"/></svg>',
+            ubah:  '<svg class="ikon-aksi" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L18.5 9.5a2.47 2.47 0 0 0-3.5-3.5L4.5 16.5 4 20z"/></svg>',
+            hapus: '<svg class="ikon-aksi" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6.5h16"/><path d="M9.5 6.5v-2h5v2"/><path d="M6.6 6.5 7.6 20h8.8l1-13.5"/><path d="M10.4 10v6"/><path d="M13.6 10v6"/></svg>',
+            pindai: '<svg class="ikon-sec" viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 12a8.5 8.5 0 1 1-2.6-6.1"/><path d="M20.8 4v4.6h-4.6"/></svg>',
+            gembok: '<svg class="ikon-sec" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="10.5" width="14" height="10" rx="2"/><path d="M8.5 10.5V7.8a3.5 3.5 0 0 1 7 0v2.7"/></svg>',
+            gembokBuka: '<svg class="ikon-sec" viewBox="0 0 24 24" aria-hidden="true" style="opacity:.55"><rect x="5" y="10.5" width="14" height="10" rx="2"/><path d="M8.5 10.5V7.8a3.5 3.5 0 0 1 6.6-1.6"/></svg>',
+            bola: '<svg class="ikon-sec" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17"/><ellipse cx="12" cy="12" rx="3.8" ry="8.5"/></svg>',
+        };
+
+        // Dipakai di dua tempat (waktu kartu dibuat & waktu judulnya diperbarui),
+        // jadi ditaruh satu fungsi supaya tidak pernah beda.
+        function ikonAksiKartu(id) {
+            return `<div class="action-icons">
+                        <span onclick="renameDevice('${id}')" title="Ubah Nama AC">${IKON.ubah}</span>
+                        <span onclick="removeCard('${id}')" title="Hapus Panel AC ini">${IKON.hapus}</span>
+                    </div>`;
+        }
+
+        let autoSaveTimers = {};
+        let lastSeen = {}; 
+        let deviceIps = {}; 
+        let deviceTitles = {}; 
+
+        // Warna status koneksi diatur lewat KELAS, bukan style.background inline -
+        // supaya warnanya ikut satu sumber di CSS dan tidak bertabrakan dengan tema.
+        function setStatusKoneksi(teks, kelas) {
+            let el = document.getElementById("conn-status");
+            el.className = kelas;
+            el.innerText = teks;
+        }
+
+        const saatKoneksiPutus = (responseObject) => {
+            setStatusKoneksi("Terputus — mencoba lagi...", "putus");
+            setTimeout(connectMQTT, 3000);
+        };
+
+        const saatPesanMasuk = (message) => {
+            try {
+                // Abaikan pesan kosong (efek dari penghapusan memori di broker)
+                if (message.payloadString.trim() === "") return;
+
+                let data = JSON.parse(message.payloadString);
+
+                // Hasil pindaian WiFi datang di topik terpisah (.../wifi_scan),
+                // bentuknya beda dari status - jangan diperlakukan sebagai kartu AC.
+                if ((message.destinationName || "").endsWith("/wifi_scan")) {
+                    if (data.id) tampilkanHasilScan(data.id, data.nets || []);
+                    return;
+                }
+
+                if (data.ip) deviceIps[data.id] = data.ip;
+                if (data.title) deviceTitles[data.id] = data.title; 
+                
+                if (data.online === false) { lastSeen[data.id] = 0; } 
+                else { lastSeen[data.id] = Date.now(); }
+                
+                updateOrCreateCard(data);
+            } catch (e) { console.error("Format Data Salah", e); }
+        };
+
+        function connectMQTT() {
+            if (!client) return;
+            client.connect({
+                useSSL: true,
+                onSuccess: () => {
+                    setStatusKoneksi("Terhubung", "tersambung");
+                    client.subscribe(baseTopic);
+                    client.subscribe(scanTopic);   // hasil pindaian WiFi per alat
+                },
+                onFailure: (err) => {
+                    // Dulu kegagalan didiamkan: layar tetap menulis "Menghubungkan
+                    // ke Server..." selamanya, jadi tidak ada bedanya antara
+                    // "sedang menyambung" dan "sudah berkali-kali gagal".
+                    setStatusKoneksi("Gagal menyambung — mencoba lagi...", "putus");
+                    setTimeout(connectMQTT, 3000);
+                }
+            });
+        }
+
+        // ================= FITUR HAPUS PANEL AC & HAPUS MEMORI BROKER =================
+        function removeCard(devId) {
+            let confirmDelete = confirm("Hapus panel ini?\n\nJika dihapus, panel tidak akan muncul lagi kecuali alat fisik menyala kembali ke internet.");
+            
+            if (confirmDelete) {
+                // 1. MENGHAPUS MEMORI "HANTU" DARI BROKER (Pesan Kosong dengan Retained True)
+                let topic = `agus_smart_ac/${devId}/status`;
+                let emptyMsg = new PAHO.Message("");
+                emptyMsg.destinationName = topic;
+                emptyMsg.retained = true; 
+                client.send(emptyMsg);
+
+                // 2. Hapus elemen HTML (kartu) dari layar
+                let card = document.getElementById("card_" + devId);
+                if (card) {
+                    card.remove();
+                }
+                
+                // 3. Hapus memori di background HTML
+                delete lastSeen[devId];
+                delete deviceIps[devId];
+                delete deviceTitles[devId];
+                delete acNyala[devId];
+                clearTimeout(saklarTimer[devId]);
+                delete saklarTimer[devId];
+                perbaruiRingkas();
+            }
+        }
+
+        // ================= FITUR UBAH NAMA AC =================
+        function renameDevice(devId) {
+            let currentName = deviceTitles[devId] || devId;
+            let newName = prompt("Ubah nama alat ini (Cth: AC Ruang Rapat, AC Server, dll):", currentName);
+            
+            if (newName && newName.trim() !== "" && newName !== currentName) {
+                sendCommand(devId, 'set_name', { new_name: newName.trim() });
+            }
+        }
+
+        async function downloadCardFiltered(devId) {
+            let ip = deviceIps[devId];
+            if (!ip) { alert("⚠️ Alamat IP perangkat belum diterima. Pastikan perangkat menyala."); return; }
+            let rawTitle = deviceTitles[devId] || devId;
+            let cleanTitle = rawTitle.replace(/\s+/g, '_'); 
+            let start = document.getElementById(`start_${devId}`).value;
+            let end = document.getElementById(`end_${devId}`).value;
+            
+            try {
+                let response = await fetch(`http://${ip}/log_ac.csv`);
+                if (!response.ok) throw new Error("File log tidak ditemukan di perangkat ini.");
+                let text = await response.text();
+                let lines = text.split('\n');
+                let filtered = lines.filter(line => {
+                    if (line.trim() === '') return false;
+                    let datePart = line.split(' ')[0]; 
+                    if (start && datePart < start) return false;
+                    if (end && datePart > end) return false;
+                    return true;
+                });
+                if (filtered.length === 0) { alert("⚠️ Tidak ada data catatan pada rentang tanggal tersebut."); return; }
+
+                let header = "TANGGAL_WAKTU, STATUS, HARIAN(HH:MM), BULANAN(HH:MM), TAHUNAN(HH:MM), TOTAL_KESELURUHAN(HH:MM)\n";
+                let blob = new Blob([header + filtered.join('\n')], { type: 'text/csv' });
+                let url = window.URL.createObjectURL(blob);
+                let a = document.createElement('a'); a.href = url;
+                a.download = `Log_${cleanTitle}_${start||'Awal'}_sd_${end||'Akhir'}.csv`; a.click();
+            } catch (e) { alert("❌ Gagal mengunduh. Pastikan perangkat dan komputer berada dalam satu jaringan WiFi lokal.\nDetail: " + e.message); }
+        }
+
+        async function downloadCardAll(devId) {
+            let ip = deviceIps[devId];
+            if (!ip) { alert("⚠️ Alamat IP perangkat belum diterima."); return; }
+            let rawTitle = deviceTitles[devId] || devId;
+            let cleanTitle = rawTitle.replace(/\s+/g, '_');
+
+            try {
+                let response = await fetch(`http://${ip}/log_ac.csv`);
+                if (!response.ok) throw new Error("File log tidak ditemukan.");
+                let text = await response.text();
+                let header = "TANGGAL_WAKTU, STATUS, HARIAN(HH:MM), BULANAN(HH:MM), TAHUNAN(HH:MM), TOTAL_KESELURUHAN(HH:MM)\n";
+                let blob = new Blob([header + text], { type: 'text/csv' });
+                let url = window.URL.createObjectURL(blob);
+                let a = document.createElement('a'); a.href = url;
+                a.download = `Semua_Log_${cleanTitle}.csv`; a.click();
+            } catch (e) { alert("❌ Gagal mengunduh: " + e.message); }
+        }
+
+        setInterval(() => {
+            let now = Date.now();
+            for (let id in lastSeen) {
+                let devStatusBadge = document.getElementById(`dev_status_${id}`);
+                if (devStatusBadge) {
+                    let lepas = (now - lastSeen[id] > 15000);
+                    devStatusBadge.className = "device-status " + (lepas ? "status-offline" : "status-online");
+                    devStatusBadge.innerText = lepas ? "● OFFLINE" : "● ONLINE";
+
+                    // Warna dipindah ke KELAS (bukan style.color inline) - kode lama
+                    // memaksa warna "#333" yang di tema gelap ini praktis tidak terbaca.
+                    let jam = document.getElementById(`time_${id}`);
+                    if (jam) jam.classList.toggle("mati", lepas);
+                    let kartu = document.getElementById(`card_${id}`);
+                    if (kartu) kartu.classList.toggle("lepas", lepas);
+
+                    // Jangan biarkan keterangan saklar berbunyi "Ketuk untuk
+                    // mematikan" pada alat yang sudah offline - itu menyesatkan,
+                    // karena yang tampil adalah data TERAKHIR, bukan keadaan kini.
+                    let ket = document.getElementById(`saklar_ket_${id}`);
+                    if (ket && lepas) ket.innerText = "Alat offline — ini data terakhir";
+                }
+            }
+            perbaruiRingkas();   // hitungan online/offline ikut segar tiap 2 detik
+        }, 2000);
+
+        function updateOrCreateCard(data) {
+            let container = document.getElementById("ac-container");
+            let cardId = "card_" + data.id;
+            let card = document.getElementById(cardId);
+            
+            // Penanganan "undefined" dan "NaN" saat offline
+            let runtimeVal = data.runtime || 0;
+            let h = Math.floor(runtimeVal / 60);
+            let m = runtimeVal % 60;
+            
+            let runtimeStr = (data.online === false) ? "Data Terakhir Tidak Tersedia" : `${h} Jam ${m} Menit`;
+            let timeStr = data.time || "--:--:--";
+
+            if (!card) {
+                card = document.createElement("div");
+                card.className = "ac-card";
+                card.id = cardId;
+                
+                let schedHTML = '';
+                for(let i=0; i<5; i++) {
+                    schedHTML += `<div class="sched-row">
+                        <div style="display:flex; justify-content:space-between; align-items:center;">
+                            <div><strong>J${i+1}</strong> <input type="checkbox" id="en_${data.id}_${i}" onchange="triggerAutoSave('${data.id}')"></div>
+                            <div class="time-box">ON <input type="number" id="on_h_${data.id}_${i}" min="0" max="23" oninput="triggerAutoSave('${data.id}')" onchange="triggerAutoSave('${data.id}')">:<input type="number" id="on_m_${data.id}_${i}" min="0" max="59" oninput="triggerAutoSave('${data.id}')" onchange="triggerAutoSave('${data.id}')"></div>
+                            <div class="time-box">OFF <input type="number" id="off_h_${data.id}_${i}" min="0" max="23" oninput="triggerAutoSave('${data.id}')" onchange="triggerAutoSave('${data.id}')">:<input type="number" id="off_m_${data.id}_${i}" min="0" max="59" oninput="triggerAutoSave('${data.id}')" onchange="triggerAutoSave('${data.id}')"></div>
+                        </div>
+                        <div class="days-box">
+                            <label><input type="checkbox" id="d_${data.id}_${i}_1" onchange="triggerAutoSave('${data.id}')">Sn</label>
+                            <label><input type="checkbox" id="d_${data.id}_${i}_2" onchange="triggerAutoSave('${data.id}')">Sl</label>
+                            <label><input type="checkbox" id="d_${data.id}_${i}_3" onchange="triggerAutoSave('${data.id}')">Rb</label>
+                            <label><input type="checkbox" id="d_${data.id}_${i}_4" onchange="triggerAutoSave('${data.id}')">Km</label>
+                            <label><input type="checkbox" id="d_${data.id}_${i}_5" onchange="triggerAutoSave('${data.id}')">Jm</label>
+                            <label><input type="checkbox" id="d_${data.id}_${i}_6" onchange="triggerAutoSave('${data.id}')">Sb</label>
+                            <label><input type="checkbox" id="d_${data.id}_${i}_0" onchange="triggerAutoSave('${data.id}')">Mn</label>
+                        </div>
+                    </div>`;
+                }
+
+                card.innerHTML = `
+                    <div class="ac-title" id="title_${data.id}">
+                        <span>${escHtml(data.title)}</span>
+                        ${ikonAksiKartu(data.id)}
+                    </div>
+                    <div style="text-align:center;"><div id="dev_status_${data.id}" class="device-status">Memuat...</div></div>
+                    <div class="ac-time" id="time_${data.id}">${timeStr}</div>
+                    <div class="ac-stats" id="stats_${data.id}">Pemakaian Bulan Ini: ${runtimeStr}</div>
+
+                    <!-- SAKLAR NYALA/MATI: tombol polos diganti saklar sungguhan yang
+                         posisinya mengikuti keadaan AC sebenarnya di alat. Ikonnya
+                         simbol daya IEC (lingkaran terputus + garis tegak). -->
+                    <button class="saklar" id="saklar_${data.id}" type="button"
+                            aria-pressed="false" title="Nyalakan / matikan AC secara manual"
+                            onclick="tekanSaklar('${data.id}')">
+                        <span class="sw-track">
+                            <span class="sw-knob">
+                                <svg class="sw-ico" viewBox="0 0 24 24" aria-hidden="true">
+                                    <path d="M18.36 6.64a9 9 0 1 1-12.73 0"/>
+                                    <line x1="12" y1="2.5" x2="12" y2="12"/>
+                                </svg>
+                            </span>
+                        </span>
+                        <span class="sw-teks">
+                            <b id="badge_${data.id}">AC MATI</b>
+                            <small id="saklar_ket_${data.id}">Ketuk untuk menyalakan</small>
+                        </span>
+                    </button>
+
+                    <details class="blok" open>
+                        <summary>
+                            <span class="panah">▶</span>
+                            <span class="judul-blok">${IKON.jam} Jadwal Otomatis</span>
+                            <span class="hitung" id="sched_hitung_${data.id}"></span>
+                        </summary>
+                        <div class="blok-isi">
+                            ${schedHTML}
+                            <button id="btn_save_${data.id}" class="btn-save">Jadwal Otomatis Sinkron ✔</button>
+                        </div>
+                    </details>
+
+                    <div class="wifi-box">
+                        <div class="wifi-head">
+                            <span class="judul-blok">${IKON.wifi} WiFi Perangkat</span>
+                            <span id="wifi_slot_${data.id}" style="font-weight:normal; color:var(--sangat-redup);"></span>
+                        </div>
+                        <div id="wifi_info_${data.id}"></div>
+                        <ul class="wifi-daftar" id="wifi_list_${data.id}"></ul>
+                        <div class="wifi-aksi">
+                            <button class="btn-wifi-add" onclick="toggleFormWifi('${data.id}')">+ Tambah WiFi Cadangan</button>
+                            <button class="btn-wifi-scan" onclick="pindaiWifi('${data.id}')" id="wifi_scanbtn_${data.id}"><span class="judul-blok">${IKON.pindai} Pindai</span></button>
+                        </div>
+                        <div class="wifi-form" id="wifi_form_${data.id}" style="display:none;">
+                            <div class="wifi-scan-hasil" id="wifi_scanhasil_${data.id}" style="display:none;"></div>
+                            <input type="text" id="wifi_ssid_${data.id}" placeholder="Nama WiFi (SSID)" autocomplete="off">
+                            <input type="password" id="wifi_pass_${data.id}" placeholder="Sandi WiFi" autocomplete="new-password">
+                            <label class="baris"><input type="checkbox" onchange="lihatSandi('${data.id}', this.checked)"> Tampilkan sandi</label>
+
+                            <div class="wifi-jalur">
+                                <button id="wifi_jalur_lokal_${data.id}" class="aktif" onclick="pilihJalur('${data.id}','lokal')"><span class="judul-blok">${IKON.gembok} Lokal (aman)</span></button>
+                                <button id="wifi_jalur_mqtt_${data.id}" onclick="pilihJalur('${data.id}','mqtt')"><span class="judul-blok">${IKON.bola} Lewat internet</span></button>
+                            </div>
+
+                            <div id="wifi_warn_${data.id}" class="wifi-warn" style="display:none;">
+                                <b>Peringatan:</b> broker <code>broker.emqx.io</code> itu broker <b>publik tanpa autentikasi</b>, dan nama topik perangkatmu bisa ditebak.
+                                Kalau lewat jalur ini, <b>sandi WiFi-mu bisa dibaca siapa pun</b> yang ikut mendengarkan topik itu.
+                                Pakai hanya kalau kamu memang sedang tidak satu jaringan dengan alat, dan sebaiknya ganti sandi WiFi setelahnya.
+                                <label class="baris" style="margin-top:6px;">
+                                    <input type="checkbox" id="wifi_setuju_${data.id}"> Saya paham risikonya dan tetap mau lanjut
+                                </label>
+                            </div>
+
+                            <button class="btn-wifi-add" onclick="simpanWifi('${data.id}')" id="wifi_simpan_${data.id}">Simpan ke Perangkat</button>
+                            <div class="wifi-pesan" id="wifi_msg_${data.id}"></div>
+                        </div>
+                    </div>
+
+                    <details class="blok">
+                        <summary>
+                            <span class="panah">▶</span>
+                            <span class="judul-blok">${IKON.unduh} Unduh Log Pemakaian</span>
+                        </summary>
+                        <div class="blok-isi">
+                            <div class="card-log-inputs">
+                                <input type="date" id="start_${data.id}" title="Dari Tanggal">
+                                <input type="date" id="end_${data.id}" title="Sampai Tanggal">
+                            </div>
+                            <div class="card-btn-group">
+                                <button class="btn-card-blue" onclick="downloadCardFiltered('${data.id}')">Filter Tanggal</button>
+                                <button class="btn-card-green" onclick="downloadCardAll('${data.id}')">Semua Log</button>
+                            </div>
+                        </div>
+                    </details>
+                `;
+                container.appendChild(card);
+            } else {
+                let titleElement = document.getElementById(`title_${data.id}`);
+                if (titleElement) {
+                    titleElement.innerHTML =
+                        `<span>${escHtml(data.title)}</span>` + ikonAksiKartu(data.id);
+                }
+            }
+            
+            document.getElementById(`time_${data.id}`).innerText = timeStr;
+            document.getElementById(`stats_${data.id}`).innerText = `Pemakaian Bulan Ini: ${runtimeStr}`;
+            acNyala[data.id] = !!data.status;
+            renderSaklar(data.id, data.status);
+            hitungJadwalAktif(data);
+
+            renderWifi(data);   // perbarui panel WiFi cadangan
+            perbaruiRingkas();
+
+            // Hanya perbarui form jadwal jika ada data jadwal yang diterima (saat alat online)
+            if (data.schedules) {
+                for(let i=0; i<5; i++) {
+                    let s = data.schedules[i];
+                    let on_h_input = document.getElementById(`on_h_${data.id}_${i}`);
+                    if (document.activeElement !== on_h_input && 
+                        document.activeElement !== document.getElementById(`on_m_${data.id}_${i}`) &&
+                        document.activeElement !== document.getElementById(`off_h_${data.id}_${i}`) &&
+                        document.activeElement !== document.getElementById(`off_m_${data.id}_${i}`)) { 
+                        
+                        document.getElementById(`en_${data.id}_${i}`).checked = (s.on_h >= 0 || s.off_h >= 0);
+                        on_h_input.value = s.on_h >= 0 ? String(s.on_h).padStart(2,'0') : "";
+                        document.getElementById(`on_m_${data.id}_${i}`).value = s.on_h >= 0 ? String(s.on_m).padStart(2,'0') : "";
+                        document.getElementById(`off_h_${data.id}_${i}`).value = s.off_h >= 0 ? String(s.off_h).padStart(2,'0') : "";
+                        document.getElementById(`off_m_${data.id}_${i}`).value = s.off_h >= 0 ? String(s.off_m).padStart(2,'0') : "";
+                        
+                        for(let d=0; d<7; d++) {
+                            document.getElementById(`d_${data.id}_${i}_${d}`).checked = (s.days & (1 << d)) !== 0;
+                        }
+                    }
+                }
+            }
+        }
+
+        // =====================================================================
+        //  PANEL WIFI CADANGAN
+        // =====================================================================
+        // Tujuannya satu: alat tidak lagi bergantung pada SATU WiFi. Alat sudah
+        // punya WiFiMulti (bisa pindah sendiri ke WiFi lain begitu yang dipakai
+        // hilang), tapi selama ini daftarnya cuma bisa diisi lewat captive
+        // portal - dan portal itu baru terbuka kalau SEMUA WiFi tersimpan mati.
+        // Jadi selama alat masih hidup di WiFi A, tidak ada cara menambahkan
+        // WiFi B. Panel ini yang membuka jalan itu.
+
+        let wifiJalur = {};        // id -> 'lokal' | 'mqtt'
+        let wifiScanHasil = {};    // id -> [{ssid, rssi, lock}]
+
+        function escHtml(s) {
+            return String(s == null ? "" : s).replace(/[&<>"']/g, c => (
+                { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]
+            ));
+        }
+
+        // Perlu karena SSID bisa mengandung kutip/backslash yang merusak
+        // atribut onclick kalau ditempel mentah-mentah.
+        function escAttr(s) { return escHtml(s).replace(/`/g, '&#96;'); }
+
+        function barSinyal(rssi) {
+            // RSSI dBm: >=-55 sangat baik, >=-67 baik, >=-75 lumayan, di bawah itu lemah
+            let n = 0, kelas = '';
+            if (rssi >= -55) { n = 4; }
+            else if (rssi >= -67) { n = 3; }
+            else if (rssi >= -75) { n = 2; kelas = 'lemah'; }
+            else if (rssi >= -85) { n = 1; kelas = 'buruk'; }
+            else { n = 1; kelas = 'buruk'; }
+            let bar = '';
+            for (let i = 1; i <= 4; i++) bar += `<i class="${i <= n ? 'on' : ''}"></i>`;
+            return `<span class="sinyal ${kelas}">${bar}</span>`;
+        }
+
+        function renderWifi(data) {
+            let info = document.getElementById(`wifi_info_${data.id}`);
+            let list = document.getElementById(`wifi_list_${data.id}`);
+            let slot = document.getElementById(`wifi_slot_${data.id}`);
+            if (!info || !list) return;
+
+            // Firmware lama tidak mengirim info wifi sama sekali -> jangan pura-pura
+            // panelnya berfungsi, katakan apa adanya.
+            if (data.aps === undefined && data.ssid === undefined) {
+                info.innerHTML = `<div class="wifi-kosong">Perangkat ini belum mengirim info WiFi —
+                    perlu update firmware (IOT_AC_Control.ino) agar panel ini berfungsi.</div>`;
+                list.innerHTML = '';
+                if (slot) slot.textContent = '';
+                return;
+            }
+
+            let ssidAktif = data.ssid || '';
+            let rssi = (typeof data.rssi === 'number') ? data.rssi : null;
+            info.innerHTML = `
+                <div class="wifi-aktif">
+                    <span class="nama">${ssidAktif ? escHtml(ssidAktif) : '(tidak tersambung)'}</span>
+                    <span style="display:flex; align-items:center; gap:5px;">
+                        ${rssi !== null ? barSinyal(rssi) : ''}
+                        ${rssi !== null ? `<span class="rssi-txt">${rssi} dBm</span>` : ''}
+                    </span>
+                </div>`;
+
+            let aps = Array.isArray(data.aps) ? data.aps : [];
+            if (slot) slot.textContent = `${aps.length}/5 tersimpan`;
+
+            if (aps.length === 0) {
+                list.innerHTML = `<li style="border:none; background:none; padding:4px 2px;">
+                    <span class="wifi-kosong">Belum ada WiFi cadangan — kalau WiFi ini mati, alat akan kehilangan koneksi.</span>
+                </li>`;
+            } else if (aps.length === 1) {
+                list.innerHTML = aps.map(s => barisWifi(data.id, s, ssidAktif)).join('') +
+                    `<li style="border:none; background:none; padding:4px 2px;">
+                        <span class="wifi-kosong">Baru 1 WiFi tersimpan. Tambah minimal satu lagi sebagai cadangan.</span>
+                    </li>`;
+            } else {
+                list.innerHTML = aps.map(s => barisWifi(data.id, s, ssidAktif)).join('');
+            }
+        }
+
+        function barisWifi(devId, ssid, ssidAktif) {
+            let kini = (ssid === ssidAktif) ? '<span class="kini">dipakai</span>' : '';
+            return `<li>
+                <span class="ssid">${escHtml(ssid)}${kini}</span>
+                <span class="wifi-hapus" title="Hapus dari daftar cadangan"
+                      onclick="hapusWifi('${escAttr(devId)}', '${escAttr(ssid)}')">✕</span>
+            </li>`;
+        }
+
+        function toggleFormWifi(id) {
+            let f = document.getElementById(`wifi_form_${id}`);
+            if (f) f.style.display = (f.style.display === 'none') ? 'block' : 'none';
+        }
+
+        function lihatSandi(id, tampil) {
+            let i = document.getElementById(`wifi_pass_${id}`);
+            if (i) i.type = tampil ? 'text' : 'password';
+        }
+
+        function pilihJalur(id, jalur) {
+            wifiJalur[id] = jalur;
+            document.getElementById(`wifi_jalur_lokal_${id}`).classList.toggle('aktif', jalur === 'lokal');
+            document.getElementById(`wifi_jalur_mqtt_${id}`).classList.toggle('aktif', jalur === 'mqtt');
+            document.getElementById(`wifi_warn_${id}`).style.display = (jalur === 'mqtt') ? 'block' : 'none';
+        }
+
+        function pesanWifi(id, teks, jenis) {
+            let el = document.getElementById(`wifi_msg_${id}`);
+            if (el) { el.className = 'wifi-pesan ' + jenis; el.innerHTML = teks; }
+        }
+
+        // fetch dengan batas waktu - alat lokal yang tidak terjangkau harus gagal
+        // cepat dengan penjelasan, bukan menggantung tanpa akhir.
+        async function fetchBatas(url, opt, ms = 8000) {
+            const ctrl = new AbortController();
+            const t = setTimeout(() => ctrl.abort(), ms);
+            try {
+                return await fetch(url, Object.assign({}, opt, { signal: ctrl.signal }));
+            } catch (e) {
+                if (e.name === 'AbortError') throw new Error(`Alat tidak menjawab dalam ${Math.round(ms/1000)} detik`);
+                throw e;
+            } finally { clearTimeout(t); }
+        }
+
+        async function simpanWifi(id) {
+            let ssid = document.getElementById(`wifi_ssid_${id}`).value.trim();
+            let pass = document.getElementById(`wifi_pass_${id}`).value;
+            let jalur = wifiJalur[id] || 'lokal';
+
+            if (!ssid) { pesanWifi(id, 'Nama WiFi (SSID) belum diisi.', 'err'); return; }
+
+            if (jalur === 'mqtt') {
+                let setuju = document.getElementById(`wifi_setuju_${id}`);
+                if (!setuju || !setuju.checked) {
+                    pesanWifi(id, 'Centang dulu kotak persetujuan risiko di atas kalau memang mau lewat internet.', 'err');
+                    return;
+                }
+                if (!klienSiap()) { pesanWifi(id, 'Belum tersambung ke broker.', 'err'); return; }
+                sendCommand(id, 'wifi_add', { ssid: ssid, pass: pass });
+                pesanWifi(id, '📡 Perintah dikirim lewat broker. Daftar di atas akan ikut berubah kalau alat menerimanya.', 'info');
+                bersihkanFormWifi(id);
+                return;
+            }
+
+            // ---- Jalur LOKAL: sandi dikirim langsung ke alat, tidak lewat broker ----
+            let ip = deviceIps[id];
+            if (!ip) { pesanWifi(id, 'Alamat IP alat belum diterima. Tunggu alat mengirim status dulu.', 'err'); return; }
+
+            let btn = document.getElementById(`wifi_simpan_${id}`);
+            if (btn) { btn.disabled = true; btn.innerText = 'Mengirim...'; }
+            pesanWifi(id, 'Mengirim langsung ke alat...', 'info');
+
+            try {
+                // text/plain = "simple request" CORS, jadi browser tidak perlu
+                // preflight OPTIONS lebih dulu. Sandi ada di BODY, bukan di URL,
+                // supaya tidak ikut tercatat di riwayat browser / log.
+                let r = await fetchBatas(`http://${ip}/wifi_add`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'text/plain' },
+                    body: JSON.stringify({ ssid: ssid, pass: pass })
+                });
+                let data = await r.json();
+                if (!data.ok) throw new Error(data.error || 'ditolak alat');
+                pesanWifi(id, data.diperbarui
+                    ? `✔ Sandi untuk <b>${escHtml(ssid)}</b> diperbarui di alat.`
+                    : `✔ <b>${escHtml(ssid)}</b> ditambahkan sebagai WiFi cadangan.`, 'ok');
+                bersihkanFormWifi(id);
+            } catch (e) {
+                pesanWifi(id,
+                    `❌ Gagal lewat jalur lokal: ${escHtml(e.message)}.<br>
+                     Jalur lokal butuh HP/PC ini <b>satu jaringan WiFi dengan alat</b> (alat di ${escHtml(ip)}).
+                     Kalau kamu sedang di jaringan lain, pindah ke tombol "🌐 Lewat internet" — tapi baca dulu peringatannya.`, 'err');
+            } finally {
+                if (btn) { btn.disabled = false; btn.innerText = 'Simpan ke Perangkat'; }
+            }
+        }
+
+        function bersihkanFormWifi(id) {
+            // Sandi TIDAK PERNAH disimpan di dashboard (tidak ke localStorage,
+            // tidak ke variabel) - begitu terkirim, langsung dihapus dari layar.
+            let p = document.getElementById(`wifi_pass_${id}`);
+            let s = document.getElementById(`wifi_ssid_${id}`);
+            if (p) p.value = '';
+            if (s) s.value = '';
+            let setuju = document.getElementById(`wifi_setuju_${id}`);
+            if (setuju) setuju.checked = false;
+        }
+
+        async function hapusWifi(id, ssid) {
+            if (!confirm(`Hapus "${ssid}" dari daftar WiFi cadangan alat?`)) return;
+
+            let ip = deviceIps[id];
+            if (ip) {
+                try {
+                    let r = await fetchBatas(`http://${ip}/wifi_del`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'text/plain' },
+                        body: JSON.stringify({ ssid: ssid })
+                    });
+                    let data = await r.json();
+                    if (data.ok) { pesanWifi(id, `✔ "${escHtml(ssid)}" dihapus dari daftar.`, 'ok'); return; }
+                } catch (e) { /* jatuh ke jalur broker di bawah */ }
+            }
+            // Nama WiFi bukan rahasia, jadi menghapus lewat broker tidak berisiko
+            // seperti mengirim sandi.
+            if (klienSiap()) {
+                sendCommand(id, 'wifi_del', { ssid: ssid });
+                pesanWifi(id, `📡 Perintah hapus dikirim lewat broker.`, 'info');
+            } else {
+                pesanWifi(id, 'Gagal menghapus: alat tidak terjangkau lokal & broker terputus.', 'err');
+            }
+        }
+
+        async function pindaiWifi(id) {
+            let btn = document.getElementById(`wifi_scanbtn_${id}`);
+            let kotak = document.getElementById(`wifi_scanhasil_${id}`);
+            let form = document.getElementById(`wifi_form_${id}`);
+            if (form) form.style.display = 'block';
+            // innerHTML (bukan innerText) supaya ikon SVG di dalam tombol tidak terhapus
+            if (btn) { btn.disabled = true; btn.innerHTML = '<span class="judul-blok">Memindai...</span>'; }
+
+            let ip = deviceIps[id];
+            try {
+                if (!ip) throw new Error('IP alat belum diterima');
+                // Pindai butuh ~3-5 detik di sisi ESP32 (WiFi.scanNetworks memblokir)
+                let r = await fetchBatas(`http://${ip}/wifi_scan`, {}, 15000);
+                let data = await r.json();
+                tampilkanHasilScan(id, data.nets || []);
+            } catch (e) {
+                if (klienSiap()) {
+                    sendCommand(id, 'wifi_scan', {});
+                    pesanWifi(id, '📡 Minta alat memindai lewat broker... hasilnya muncul beberapa detik lagi.', 'info');
+                } else {
+                    pesanWifi(id, `❌ Gagal memindai: ${escHtml(e.message)}`, 'err');
+                }
+            } finally {
+                setTimeout(() => {
+                    if (btn) {
+                        btn.disabled = false;
+                        btn.innerHTML = `<span class="judul-blok">${IKON.pindai} Pindai</span>`;
+                    }
+                }, 1000);
+            }
+            if (kotak) kotak.style.display = 'block';
+        }
+
+        function tampilkanHasilScan(id, nets) {
+            wifiScanHasil[id] = nets;
+            let kotak = document.getElementById(`wifi_scanhasil_${id}`);
+            if (!kotak) return;
+            kotak.style.display = 'block';
+            if (!nets.length) { kotak.innerHTML = '<div style="cursor:default; color:#6c757d;">Tidak ada WiFi terdeteksi.</div>'; return; }
+
+            nets.sort((a, b) => (b.rssi || -999) - (a.rssi || -999));
+            kotak.innerHTML = nets.map(n => `
+                <div onclick="pilihSsidHasilScan('${escAttr(id)}', '${escAttr(n.ssid)}')" title="Klik untuk memakai nama ini">
+                    <span class="judul-blok">${n.lock ? IKON.gembok : IKON.gembokBuka} ${escHtml(n.ssid)}</span>
+                    <span style="display:flex; align-items:center; gap:4px;">
+                        ${barSinyal(n.rssi)}<span class="rssi-txt">${n.rssi}</span>
+                    </span>
+                </div>`).join('');
+        }
+
+        function pilihSsidHasilScan(id, ssid) {
+            let f = document.getElementById(`wifi_ssid_${id}`);
+            if (f) { f.value = ssid; f.focus(); }
+            let p = document.getElementById(`wifi_pass_${id}`);
+            if (p) p.focus();
+        }
+
+        // =====================================================================
+        //  SAKLAR NYALA/MATI
+        // =====================================================================
+        // Tombol lama langsung mengirim perintah tanpa umpan balik apa pun -
+        // orang tidak tahu apakah perintahnya sampai, jadi sering diketuk
+        // berkali-kali. Sekarang saklar punya tiga keadaan yang jujur:
+        //   on / off  = keadaan yang BENAR-BENAR dilaporkan alat
+        //   nunggu    = perintah sudah dikirim, alat belum menjawab
+        // Knop berhenti di TENGAH saat menunggu - sengaja, supaya tidak
+        // terlihat seolah-olah sudah berhasil padahal belum tentu.
+
+        let acNyala = {};        // id -> boolean, keadaan AC terakhir dari alat
+        let saklarTimer = {};    // id -> timer pembatalan keadaan "nunggu"
+
+        function tekanSaklar(id) {
+            let sw = document.getElementById(`saklar_${id}`);
+            if (sw) {
+                sw.classList.remove('on');
+                sw.classList.add('nunggu');
+                let b = document.getElementById(`badge_${id}`);
+                let k = document.getElementById(`saklar_ket_${id}`);
+                if (b) b.innerText = 'MENGIRIM...';
+                if (k) k.innerText = 'Menunggu jawaban alat';
+            }
+
+            sendCommand(id, 'toggle');
+
+            // Kalau dalam 8 detik alat tidak menjawab, kembalikan tampilan ke
+            // keadaan terakhir yang diketahui - jangan biarkan menggantung di
+            // "MENGIRIM..." selamanya seolah masih diproses.
+            clearTimeout(saklarTimer[id]);
+            saklarTimer[id] = setTimeout(() => {
+                renderSaklar(id, acNyala[id]);
+                let k = document.getElementById(`saklar_ket_${id}`);
+                if (k) k.innerText = 'Alat belum menjawab — coba lagi';
+            }, 8000);
+        }
+
+        function renderSaklar(id, nyala) {
+            clearTimeout(saklarTimer[id]);          // jawaban sudah datang
+            let sw = document.getElementById(`saklar_${id}`);
+            let b  = document.getElementById(`badge_${id}`);
+            let k  = document.getElementById(`saklar_ket_${id}`);
+            let card = document.getElementById(`card_${id}`);
+            if (!sw) return;
+
+            sw.classList.remove('nunggu');
+            sw.classList.toggle('on', !!nyala);
+            sw.setAttribute('aria-pressed', nyala ? 'true' : 'false');
+            if (b) b.innerText = nyala ? 'AC MENYALA' : 'AC MATI';
+            if (k) k.innerText = nyala ? 'Ketuk untuk mematikan' : 'Ketuk untuk menyalakan';
+            if (card) card.classList.toggle('hidup', !!nyala);
+        }
+
+        // Tulis berapa jadwal yang aktif di judul blok jadwal, supaya isinya
+        // tetap terbaca sekilas walau bloknya sedang dilipat.
+        function hitungJadwalAktif(data) {
+            let el = document.getElementById(`sched_hitung_${data.id}`);
+            if (!el || !data.schedules) return;
+            let n = data.schedules.filter(s => s && (s.on_h >= 0 || s.off_h >= 0)).length;
+            el.innerText = n ? `${n} aktif` : 'belum diatur';
+        }
+
+        function perbaruiRingkas() {
+            let ids = Object.keys(lastSeen);
+            let now = Date.now();
+            let online = ids.filter(i => now - lastSeen[i] <= 15000).length;
+            let nyala  = ids.filter(i => acNyala[i] && now - lastSeen[i] <= 15000).length;
+            document.getElementById('r_total').innerText   = ids.length;
+            document.getElementById('r_nyala').innerText   = nyala;
+            document.getElementById('r_online').innerText  = online;
+            document.getElementById('r_offline').innerText = ids.length - online;
+            document.getElementById('kosong').style.display = ids.length ? 'none' : 'block';
+        }
+
+        function sendCommand(id, cmdStr, extraData = {}) {
+            let topic = `agus_smart_ac/${id}/cmd`;
+            let payload = { cmd: cmdStr, ...extraData };
+            let message = new PAHO.Message(JSON.stringify(payload));
+            message.destinationName = topic;
+            client.send(message);
+        }
+
+        function triggerAutoSave(id) {
+            let btn = document.getElementById(`btn_save_${id}`);
+            if (btn) {
+                // Warna disesuaikan tema gelap (kuning & hijau versi lembut)
+                btn.style.background = "rgba(251,191,36,.14)";
+                btn.style.color = "#fbbf24";
+                btn.style.border = "1px solid rgba(251,191,36,.35)";
+                btn.innerText = "Menyimpan Otomatis... ⏱";
+            }
+            clearTimeout(autoSaveTimers[id]);
+            autoSaveTimers[id] = setTimeout(() => { executeSave(id); }, 1000);
+        }
+
+        function executeSave(id) {
+            for(let i=0; i<5; i++) {
+                let en = document.getElementById(`en_${id}_${i}`).checked;
+                let on_h = document.getElementById(`on_h_${id}_${i}`).value;
+                let on_m = document.getElementById(`on_m_${id}_${i}`).value;
+                let off_h = document.getElementById(`off_h_${id}_${i}`).value;
+                let off_m = document.getElementById(`off_m_${id}_${i}`).value;
+                
+                let s_on_h = (en && on_h !== "") ? parseInt(on_h) : -1;
+                let s_on_m = (en && on_m !== "") ? parseInt(on_m) : -1;
+                let s_off_h = (en && off_h !== "") ? parseInt(off_h) : -1;
+                let s_off_m = (en && off_m !== "") ? parseInt(off_m) : -1;
+
+                let daysMask = 0;
+                for(let d=0; d<7; d++) {
+                    if(document.getElementById(`d_${id}_${i}_${d}`).checked) {
+                        daysMask |= (1 << d);
+                    }
+                }
+
+                setTimeout(() => {
+                    sendCommand(id, 'set_sched', { idx: i, on_h: s_on_h, on_m: s_on_m, off_h: s_off_h, off_m: s_off_m, days: daysMask });
+                }, i * 100); 
+            }
+
+            setTimeout(() => {
+                let btn = document.getElementById(`btn_save_${id}`);
+                if (btn) {
+                    btn.style.background = "rgba(52,211,153,.14)";
+                    btn.style.color = "#34d399";
+                    btn.style.border = "1px solid rgba(52,211,153,.35)";
+                    btn.innerText = "Tersimpan ✔";
+                    setTimeout(() => { if (btn.innerText === "Tersimpan ✔") btn.innerText = "Jadwal Otomatis Sinkron ✔"; }, 3000);
+                }
+            }, 600);
+        }
+
+        // =====================================================================
+        //  PEMUAT PUSTAKA MQTT & TITIK MULAI APLIKASI
+        // =====================================================================
+        // Urutan usaha:
+        //   1. berkas lokal  lib/paho-mqtt.lib.js  (tag <script> di <head>)
+        //   2. kalau tidak ada -> ambil dari CDN sebagai cadangan
+        //   3. kalau dua-duanya gagal -> tampilkan pesan JELAS, bukan layar kosong
+
+        // Dua versi Paho memakai nama berbeda dan keduanya harus bisa dipakai:
+        //   1.0.x (versi di CDN)     -> Paho.MQTT.Client / Paho.MQTT.Message
+        //   1.1.x (paket npm, lokal) -> Paho.Client      / Paho.Message
+        // Fungsi ini menyamakan keduanya, jadi kode di atas tidak perlu tahu
+        // pustakanya datang dari mana.
+        function cariPaho() {
+            if (window.Paho && Paho.MQTT && Paho.MQTT.Client) return Paho.MQTT;   // 1.0.x
+            if (window.Paho && Paho.Client) return Paho;                          // 1.1.x
+            return null;
+        }
+
+        function mulaiAplikasi() {
+            PAHO = cariPaho();
+            client = new PAHO.Client(broker, port, clientId);
+            client.onConnectionLost = saatKoneksiPutus;
+            client.onMessageArrived = saatPesanMasuk;
+            connectMQTT();
+        }
+
+        function gagalMuatPustaka() {
+            setStatusKoneksi("Pustaka MQTT gagal dimuat", "putus");
+            let el = document.getElementById("kosong");
+            el.innerHTML =
+                '<span class="ikon">🧩</span>' +
+                'Pustaka MQTT tidak bisa dimuat, jadi dashboard belum bisa menyambung ' +
+                'ke perangkat.<br><br>Pastikan berkas <b>lib/paho-mqtt.lib.js</b> ikut ' +
+                'tersalin di sebelah halaman ini, lalu muat ulang.';
+            el.style.display = "block";
+        }
+
+        function muatPaho() {
+            if (cariPaho()) { mulaiAplikasi(); return; }   // berkas lokal sudah termuat
+
+            setStatusKoneksi("Memuat pustaka MQTT...", "");
+            const s = document.createElement("script");
+            s.src = "https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.min.js";
+            s.onload  = () => { cariPaho() ? mulaiAplikasi() : gagalMuatPustaka(); };
+            s.onerror = gagalMuatPustaka;
+            document.head.appendChild(s);
+        }
+
+        muatPaho();
+    </script>
+</body>
+</html>
