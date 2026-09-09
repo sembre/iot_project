@@ -4,38 +4,26 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Cari Lokasi Rak E/C</title>
-<meta name="description" content="Cari lokasi rak berdasarkan Part Number E/C atau Part Number Connector Harness.">
+<meta name="description" content="Cari lokasi rak E/C Board berdasarkan nomor model.">
 
 <!-- Pembaca berkas Excel. Dimuat dari berkas LOKAL, bukan CDN - halaman ini
      dipakai di lantai produksi yang jaringannya belum tentu bisa keluar
      internet. Kalau berkas lokal hilang, otomatis jatuh ke CDN (lihat muatXLSX). -->
 <script src="lib/xlsx.full.min.js"></script>
 
-<!-- Data bawaan yang ikut di repo. Kalau berkas ini berisi data, halaman
-     langsung bisa dicari begitu dibuka - tanpa setup apa pun. Kalau kosong
-     atau tidak ada, halaman jatuh ke mode "muat berkas sendiri".
-     Cara membuatnya: buka halaman ini, muat list poshheader.xlsm,
-     lalu klik tombol "Ekspor data.js". -->
+<!-- Data bawaan yang ikut di repo. Kalau berisi, halaman langsung bisa dicari
+     begitu dibuka. Kalau kosong, halaman minta pemakainya memuat .xlsm sendiri. -->
 <script src="data.js" onerror="void 0"></script>
 
 <style>
   :root{
     color-scheme: dark;
-    --latar:#0b1120;
-    --kartu:rgba(255,255,255,.045);
-    --garis:rgba(255,255,255,.09);
-    --garis-terang:rgba(255,255,255,.17);
-    --teks:#e2e8f0;
-    --redup:#94a3b8;
-    --sangat-redup:#64748b;
-    --dingin:#22d3ee;
-    --hijau:#34d399;
-    --kuning:#fbbf24;
-    --merah:#f87171;
-    --ungu:#818cf8;
+    --latar:#0b1120; --kartu:rgba(255,255,255,.045);
+    --garis:rgba(255,255,255,.09); --garis-terang:rgba(255,255,255,.17);
+    --teks:#e2e8f0; --redup:#94a3b8; --sangat-redup:#64748b;
+    --dingin:#22d3ee; --hijau:#34d399; --kuning:#fbbf24; --merah:#f87171; --ungu:#818cf8;
   }
   *{ box-sizing:border-box; }
-
   body{
     margin:0; padding:0 16px 60px; min-height:100vh;
     font-family:'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', sans-serif;
@@ -43,13 +31,12 @@
     background-image:
       radial-gradient(800px 460px at 12% -10%, rgba(34,211,238,.13), transparent 60%),
       radial-gradient(700px 460px at 88% 3%,  rgba(129,140,248,.12), transparent 60%);
-    background-attachment:fixed;
-    -webkit-font-smoothing:antialiased;
+    background-attachment:fixed; -webkit-font-smoothing:antialiased;
   }
-  .bungkus{ max-width:760px; margin:0 auto; }
+  .bungkus{ max-width:820px; margin:0 auto; }
 
   /* ============================ KEPALA ============================ */
-  header{ padding:26px 0 16px; display:flex; align-items:center; gap:13px; }
+  header{ padding:24px 0 14px; display:flex; align-items:center; gap:13px; }
   .merek-ikon{
     width:44px; height:44px; border-radius:13px; flex-shrink:0; display:grid; place-items:center;
     background:linear-gradient(145deg, rgba(34,211,238,.22), rgba(129,140,248,.22));
@@ -64,25 +51,24 @@
   header p{ color:var(--redup); margin:2px 0 0; font-size:12.5px; }
   a.pulang{
     margin-left:auto; font-size:12px; color:var(--redup); text-decoration:none;
-    border:1px solid var(--garis); border-radius:9px; padding:7px 12px; white-space:nowrap;
-    transition:.2s;
+    border:1px solid var(--garis); border-radius:9px; padding:7px 12px; white-space:nowrap; transition:.2s;
   }
   a.pulang:hover{ color:var(--teks); border-color:var(--garis-terang); background:rgba(255,255,255,.05); }
 
   /* ============================ STATUS DATA ============================ */
   .bar-data{
-    display:flex; align-items:center; gap:10px; flex-wrap:wrap;
+    display:flex; align-items:center; gap:9px; flex-wrap:wrap;
     background:var(--kartu); border:1px solid var(--garis); border-radius:13px;
-    padding:11px 14px; margin-bottom:14px; font-size:12.5px;
+    padding:10px 13px; margin-bottom:12px; font-size:12.5px;
   }
   .bar-data .titik{ width:8px; height:8px; border-radius:50%; flex-shrink:0; background:var(--sangat-redup); }
   .bar-data.siap .titik{ background:var(--hijau); box-shadow:0 0 0 3px rgba(52,211,153,.18); }
   .bar-data.basi .titik{ background:var(--kuning); box-shadow:0 0 0 3px rgba(251,191,36,.18); }
-  .bar-data .isi{ flex:1; min-width:160px; color:var(--redup); line-height:1.5; }
+  .bar-data .isi{ flex:1; min-width:150px; color:var(--redup); line-height:1.5; }
   .bar-data b{ color:var(--teks); }
   .bar-data .umur{ color:var(--kuning); }
   button.kecil{
-    font-size:11.5px; padding:7px 12px; border-radius:9px; cursor:pointer;
+    font-size:11.5px; padding:7px 11px; border-radius:9px; cursor:pointer;
     background:rgba(255,255,255,.06); color:var(--redup);
     border:1px solid var(--garis-terang); font-family:inherit; transition:.2s;
   }
@@ -95,7 +81,7 @@
   }
   .muat .ikon{ font-size:38px; display:block; margin-bottom:12px; opacity:.5; }
   .muat h2{ font-size:16px; margin:0 0 8px; font-weight:700; }
-  .muat p{ color:var(--redup); font-size:13px; line-height:1.65; margin:0 auto 18px; max-width:430px; }
+  .muat p{ color:var(--redup); font-size:13px; line-height:1.65; margin:0 auto 18px; max-width:450px; }
   .tombol-utama{
     display:inline-block; font-size:14px; font-weight:700; cursor:pointer;
     padding:12px 24px; border-radius:12px; border:none; font-family:inherit;
@@ -105,17 +91,16 @@
   .tombol-utama:hover{ filter:brightness(1.08); }
   .catatan-privasi{
     margin-top:16px; font-size:11px; color:var(--sangat-redup); line-height:1.6;
-    max-width:430px; margin-left:auto; margin-right:auto;
+    max-width:450px; margin-left:auto; margin-right:auto;
   }
   input[type=file]{ display:none; }
 
   /* ============================ PENCARIAN ============================ */
-  .kotak-cari{ position:relative; margin-bottom:6px; }
+  .kotak-cari{ position:relative; margin-bottom:8px; }
   .kotak-cari input{
-    width:100%; padding:15px 46px 15px 44px; font-size:16px; /* 16px: cegah iOS zoom */
+    width:100%; padding:15px 46px 15px 44px; font-size:16px;  /* 16px: cegah iOS zoom */
     border-radius:14px; font-family:inherit;
-    background:rgba(0,0,0,.34); border:1px solid var(--garis-terang); color:var(--teks);
-    transition:.2s;
+    background:rgba(0,0,0,.34); border:1px solid var(--garis-terang); color:var(--teks); transition:.2s;
   }
   .kotak-cari input:focus{ outline:none; border-color:var(--dingin); box-shadow:0 0 0 3px rgba(34,211,238,.16); }
   .kotak-cari input::placeholder{ color:var(--sangat-redup); }
@@ -135,52 +120,54 @@
   }
   .kotak-cari .bersih:hover{ background:rgba(255,255,255,.16); color:var(--teks); }
 
-  .info-cari{ font-size:11.5px; color:var(--sangat-redup); margin:0 0 14px 4px; min-height:16px; }
+  .baris-saring{ display:flex; align-items:center; gap:9px; margin-bottom:12px; flex-wrap:wrap; }
+  select#area{
+    font-size:12.5px; padding:8px 11px; border-radius:10px; font-family:inherit;
+    background:rgba(0,0,0,.34); border:1px solid var(--garis-terang); color:var(--teks);
+    max-width:100%; cursor:pointer;
+  }
+  select#area:focus{ outline:none; border-color:var(--dingin); }
+  .info-cari{ font-size:11.5px; color:var(--sangat-redup); margin:0; }
 
   /* ============================ HASIL ============================ */
-  .hasil{ display:flex; flex-direction:column; gap:11px; }
-
+  .hasil{ display:flex; flex-direction:column; gap:10px; }
   .baris{
     background:var(--kartu); border:1px solid var(--garis); border-radius:15px;
-    padding:15px; display:flex; gap:14px; align-items:flex-start;
+    padding:14px; display:flex; gap:14px; align-items:flex-start;
     transition:border-color .2s, transform .2s;
   }
   .baris:hover{ border-color:var(--garis-terang); transform:translateY(-1px); }
   .baris.persis{ border-color:rgba(52,211,153,.4); background:rgba(52,211,153,.05); }
 
-  /* Lokasi rak = jawaban yang dicari orang. Dibuat paling besar & paling
-     kontras, supaya kebaca sambil jalan di gudang tanpa perlu memicingkan mata. */
+  /* No Rak = jawaban yang dicari. Paling besar & paling kontras supaya
+     kebaca sambil jalan di gudang tanpa memicingkan mata. */
   .rak{
-    flex-shrink:0; min-width:82px; text-align:center;
+    flex-shrink:0; min-width:92px; text-align:center;
     background:rgba(34,211,238,.1); border:1px solid rgba(34,211,238,.32);
     border-radius:12px; padding:10px 8px;
   }
   .rak .angka{
-    font-size:26px; font-weight:800; color:#67e8f9; line-height:1.1;
-    letter-spacing:-.5px; word-break:break-word;
-    font-variant-numeric:tabular-nums;
+    font-size:23px; font-weight:800; color:#67e8f9; line-height:1.15;
+    letter-spacing:-.4px; word-break:break-word;
   }
-  .rak .angka.kosong{ font-size:15px; color:var(--merah); font-weight:700; }
+  .rak .angka.kosong{ font-size:15px; color:var(--merah); }
   .rak .label{ font-size:9px; color:var(--sangat-redup); text-transform:uppercase; letter-spacing:.8px; margin-top:3px; }
 
   .rincian{ flex:1; min-width:0; }
-  .part{ font-size:14.5px; font-weight:700; color:#f1f5f9; line-height:1.4; word-break:break-word; }
-  .part mark{ background:rgba(251,191,36,.28); color:#fde68a; border-radius:3px; padding:0 2px; }
-  .harness{ font-size:12px; color:var(--ungu); margin-top:3px; word-break:break-word; }
-  .harness mark{ background:rgba(251,191,36,.28); color:#fde68a; border-radius:3px; padding:0 2px; }
+  .model{ font-size:14.5px; font-weight:700; color:#f1f5f9; line-height:1.4; word-break:break-word; }
+  .model mark{ background:rgba(251,191,36,.28); color:#fde68a; border-radius:3px; padding:0 2px; }
   .meta{ display:flex; flex-wrap:wrap; gap:6px; margin-top:9px; }
   .cip{
     font-size:10.5px; color:var(--redup); background:rgba(0,0,0,.3);
     border:1px solid var(--garis); border-radius:6px; padding:3px 8px;
   }
-  .cip b{ color:var(--teks); font-weight:600; }
-  .cip.qty-nol{ color:var(--merah); border-color:rgba(248,113,113,.3); background:rgba(248,113,113,.08); }
+  /* Area/ruangan WAJIB menonjol: nomor rak tanpa tahu gedungnya tidak ada gunanya. */
+  .cip.area{ color:#c7d2fe; background:rgba(129,140,248,.14); border-color:rgba(129,140,248,.35); font-weight:600; }
 
   /* ============================ KEADAAN KOSONG ============================ */
-  .kosong{ text-align:center; padding:38px 16px; color:var(--sangat-redup); font-size:13.5px; line-height:1.7; }
+  .kosong{ text-align:center; padding:36px 16px; color:var(--sangat-redup); font-size:13.5px; line-height:1.7; }
   .kosong .ikon{ font-size:36px; display:block; margin-bottom:10px; opacity:.35; }
   .kosong b{ color:var(--redup); }
-
   .galat{
     background:rgba(248,113,113,.1); border:1px solid rgba(248,113,113,.3);
     color:#fca5a5; border-radius:12px; padding:13px 15px; font-size:12.5px;
@@ -188,12 +175,13 @@
   }
 
   @media (max-width:520px){
-    header{ flex-wrap:wrap; padding:18px 0 12px; }
+    header{ flex-wrap:wrap; padding:16px 0 10px; }
     a.pulang{ order:3; margin-left:0; width:100%; text-align:center; }
     h1{ font-size:18px; }
-    .rak{ min-width:70px; padding:8px 6px; }
-    .rak .angka{ font-size:22px; }
-    .baris{ padding:13px; gap:11px; }
+    .rak{ min-width:78px; padding:8px 6px; }
+    .rak .angka{ font-size:20px; }
+    .baris{ padding:12px; gap:11px; }
+    select#area{ width:100%; }
   }
   @media (prefers-reduced-motion: reduce){ *{ transition-duration:.01ms !important; } }
 </style>
@@ -204,39 +192,34 @@
   <header>
     <div class="merek-ikon">
       <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M3 7.5h18M3 12h18M3 16.5h18"/>
-        <path d="M7.5 4v16M16.5 4v16"/>
+        <path d="M3 7.5h18M3 12h18M3 16.5h18"/><path d="M7.5 4v16M16.5 4v16"/>
       </svg>
     </div>
     <div>
       <h1>Cari Lokasi Rak E/C</h1>
-      <p>Ketik part number, lokasi raknya langsung muncul</p>
+      <p>Ketik nomor model, lokasi raknya langsung muncul</p>
     </div>
     <a class="pulang" href="../">← Menu</a>
   </header>
 
   <div id="galat" class="galat" style="display:none;"></div>
 
-  <!-- Tampil hanya kalau data belum pernah dimuat -->
   <section class="muat" id="panelMuat">
     <span class="ikon">📄</span>
-    <h2>Muat data List-PH dulu</h2>
+    <h2>Muat daftar E/C Board dulu</h2>
     <p>
-      Pilih berkas <b>list poshheader.xlsm</b> (atau .xlsx). Isinya dibaca langsung
-      dari sheet <b>List-PH</b> dan disimpan di browser ini, jadi pencarian
-      berikutnya langsung jalan — tanpa internet, tanpa server.
+      Pilih berkas <b>Daftar EC Board ….xlsm</b>. Semua sheet area dibaca sekaligus
+      (MOGAMI, GD1, GD2, EPSON, GLORY, dan lainnya) lalu disimpan di browser ini —
+      jadi pencarian berikutnya langsung jalan tanpa internet.
     </p>
     <button class="tombol-utama" id="btnPilih">Pilih berkas Excel</button>
     <input type="file" id="berkas" accept=".xlsm,.xlsx,.xls">
     <p class="catatan-privasi">
       🔒 Berkasnya dibaca di dalam browser kamu sendiri dan tidak dikirim ke mana pun.
-      Datanya tersimpan hanya di perangkat ini.
     </p>
   </section>
 
-  <!-- Tampil setelah data ada -->
   <section id="panelCari" style="display:none;">
-
     <div class="bar-data" id="barData">
       <span class="titik"></span>
       <span class="isi" id="infoData"></span>
@@ -246,11 +229,15 @@
 
     <div class="kotak-cari">
       <svg class="kaca" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M16.5 16.5 21 21"/></svg>
-      <input type="search" id="cari" placeholder="Part number E/C atau connector harness…"
+      <input type="search" id="cari" placeholder="Nomor model, mis. 2087971 atau FM3-Q971…"
              autocomplete="off" autocapitalize="characters" spellcheck="false" enterkeyhint="search">
       <button class="bersih" id="btnBersih" aria-label="Kosongkan">✕</button>
     </div>
-    <p class="info-cari" id="infoCari"></p>
+
+    <div class="baris-saring">
+      <select id="area" aria-label="Saring berdasarkan area"></select>
+      <p class="info-cari" id="infoCari"></p>
+    </div>
 
     <div class="hasil" id="hasil"></div>
   </section>
@@ -259,58 +246,48 @@
 
 <script>
 /* =====================================================================
-   DATA & PENYIMPANAN
+   SUSUNAN DATA
    =====================================================================
-   Susunan sheet List-PH mengikuti excel_writer.py yang dipakai server:
-     kolom B..I, data mulai baris 4
-     B=NO  C=PART NUMBER UNTUK E/C  D=KLASIFIKASI  E=PART NUMBER CONNECTOR HARNESS
-     F=MAKER  G=LOKASI RAK  H=QTY  I=KETERANGAN
-   Kalau susunan di Excel berubah, cukup ubah indeks di bawah ini. */
-const KUNCI_SIMPAN = 'rakEC.data.v1';
-const SHEET        = 'List-PH';
-const BARIS_MULAI  = 4;        // baris 1-3 dipakai judul & header
-const KOL          = { no:0, partEc:1, klasifikasi:2, harness:3, maker:4, lokasi:5, qty:6, keterangan:7 };
-const MIN_HURUF    = 3;        // di bawah ini hasilnya kebanyakan & tidak berguna
-const MAKS_HASIL   = 40;
-const UMUR_BASI    = 14;       // hari; setelah ini data dianggap perlu diperbarui
+   Berkas "Daftar EC Board ….xlsm" berisi BANYAK sheet, satu sheet = satu
+   area/ruangan (MOGAMI, TAKAZONO, GD1, GD2, EPSON Gedung 2, dst). Sheet
+   HOME hanya halaman sampul, bukan data.
 
-let DATA = null;               // { waktu, namaFile, baris: [ [..8 kolom..] ] }
+   Tiap sheet berkolom:  B=NO   C=MODEL   D=NO RAK / RAK   E=KETERANGAN
+   Baris header TIDAK selalu di baris yang sama (MOGAMI di baris 2,
+   TAKAZONO di baris 3), jadi barisnya DICARI - bukan dipatok angka tetap.
 
+   Satu baris data disimpan sebagai: [ MODEL, NO RAK, AREA, KETERANGAN ] */
+const KUNCI_SIMPAN = 'rakEC.data.v2';     // v2: susunan berubah dari versi awal
+const LEWATI_SHEET = ['HOME'];
+const KOL          = { model:0, rak:1, area:2, ket:3 };
+const MIN_HURUF    = 2;      // nomor model banyak yang pendek, jadi 2 sudah berguna
+const MAKS_HASIL   = 60;
+const UMUR_BASI    = 90;     // hari; daftar rak jarang berubah, jadi tidak seketat stok
+
+let DATA = null;             // { waktu, namaFile, baris:[[model,rak,area,ket]] }
 const $ = (id) => document.getElementById(id);
 
 /* ---------- Penolong teks ---------- */
-function norm(s){
-  return String(s == null ? '' : s).replace(/\s+/g, ' ').trim().toUpperCase();
-}
-// Nilai sel yang ketikannya seperti angka (No Rak "30") dibaca sebagai angka
-// oleh pembaca Excel; tanpa dirapikan akan tampil "30" -> tetap, tapi 30.0
-// kalau float. Fungsi ini menyamakan keduanya jadi teks yang wajar.
+function norm(s){ return String(s == null ? '' : s).replace(/\s+/g, ' ').trim().toUpperCase(); }
 function teksRapi(v){
   if (v == null) return '';
-  if (typeof v === 'number' && Number.isInteger(v)) return String(v);
-  if (typeof v === 'number') return String(v);
+  if (typeof v === 'number') return Number.isInteger(v) ? String(v) : String(v);
   return String(v).trim();
 }
 function escHtml(s){
   return String(s == null ? '' : s).replace(/[&<>"']/g, c =>
     ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
 }
-// Tandai bagian yang cocok, supaya kelihatan KENAPA baris ini muncul
 function sorot(teks, kunci){
   const t = escHtml(teks);
   if (!kunci) return t;
   const i = teks.toUpperCase().indexOf(kunci);
   if (i < 0) return t;
-  return escHtml(teks.slice(0, i)) + '<mark>' + escHtml(teks.slice(i, i + kunci.length)) +
-         '</mark>' + escHtml(teks.slice(i + kunci.length));
+  return escHtml(teks.slice(0,i)) + '<mark>' + escHtml(teks.slice(i, i+kunci.length)) +
+         '</mark>' + escHtml(teks.slice(i+kunci.length));
 }
-
-function tampilGalat(pesan){
-  const el = $('galat');
-  el.innerHTML = pesan;
-  el.style.display = 'block';
-}
-function bersihGalat(){ $('galat').style.display = 'none'; }
+function tampilGalat(p){ const el=$('galat'); el.innerHTML=p; el.style.display='block'; }
+function bersihGalat(){ $('galat').style.display='none'; }
 
 /* =====================================================================
    MEMBACA BERKAS EXCEL
@@ -318,58 +295,62 @@ function bersihGalat(){ $('galat').style.display = 'none'; }
 function bacaBerkas(file){
   bersihGalat();
   const pembaca = new FileReader();
-
   pembaca.onerror = () => tampilGalat('Berkas gagal dibaca. Coba pilih ulang.');
   pembaca.onload = (e) => {
     try{
       if (typeof XLSX === 'undefined'){
-        tampilGalat('Pustaka pembaca Excel belum termuat. Muat ulang halaman ini.');
-        return;
+        tampilGalat('Pustaka pembaca Excel belum termuat. Muat ulang halaman ini.'); return;
       }
       const wb = XLSX.read(new Uint8Array(e.target.result), { type:'array' });
 
-      if (!wb.SheetNames.includes(SHEET)){
-        tampilGalat('Sheet <b>' + SHEET + '</b> tidak ada di berkas itu.<br>' +
-                    'Sheet yang ditemukan: ' + escHtml(wb.SheetNames.join(', ')) +
-                    '.<br>Pastikan kamu memilih berkas <b>list poshheader.xlsm</b>.');
-        return;
-      }
-
-      const sheet = wb.Sheets[SHEET];
-
-      // PENTING - jangan hilangkan `range` di bawah ini.
-      // Tanpa range eksplisit, sheet_to_json memberi indeks yang RELATIF
-      // terhadap awal rentang terpakai sheet, bukan absolut dari kolom A.
-      // Di berkas ini kolom A sengaja dikosongkan, jadi rentangnya mulai di B
-      // dan SEMUA kolom bergeser satu: indeks 1 yang seharusnya PART NUMBER
-      // malah berisi KLASIFIKASI. Pencarian tetap berjalan tanpa error, cuma
-      // tidak pernah menemukan apa pun - gagal diam-diam yang sulit dilacak.
-      // Dengan memaksa rentang mulai di baris 1 kolom A (r:0, c:0), indeksnya
-      // jadi absolut: 1..8 = kolom B..I, apa pun isi kolom A.
-      const acuan = XLSX.utils.decode_range(sheet['!ref'] || 'A1');
-      const mentah = XLSX.utils.sheet_to_json(sheet, {
-        header:1, defval:null, blankrows:true,
-        range: { s:{ r:0, c:0 }, e:{ r:acuan.e.r, c:8 } }
-      });
       const baris = [];
-      for (let r = BARIS_MULAI - 1; r < mentah.length; r++){
-        const m = mentah[r] || [];
-        const b = [];
-        for (let c = 1; c <= 8; c++) b.push(teksRapi(m[c]));
-        // Lewati baris yang benar-benar kosong (di file asli ada baris berisi
-        // spasi nyasar - teksRapi sudah men-trim, jadi ikut terdeteksi kosong)
-        if (b.some(v => v !== '')) baris.push(b);
+      const dilewati = [];
+      for (const nama of wb.SheetNames){
+        if (LEWATI_SHEET.includes(nama.trim().toUpperCase())) continue;
+        const sheet = wb.Sheets[nama];
+        if (!sheet || !sheet['!ref']) continue;
+
+        // PENTING - jangan hilangkan `range`. Tanpa itu, sheet_to_json memberi
+        // indeks RELATIF terhadap awal rentang terpakai sheet. Kolom A di berkas
+        // ini kosong, jadi rentangnya mulai di B dan SEMUA kolom bergeser satu:
+        // yang dibaca sebagai MODEL sebenarnya kolom NO. Pencarian tetap jalan
+        // tanpa error, cuma tidak pernah menemukan apa pun - gagal diam-diam.
+        // Dengan memaksa mulai di r0/c0, indeks jadi absolut: 1=B, 2=C, 3=D, 4=E.
+        const acuan = XLSX.utils.decode_range(sheet['!ref']);
+        const mentah = XLSX.utils.sheet_to_json(sheet, {
+          header:1, defval:null, blankrows:true,
+          range:{ s:{r:0,c:0}, e:{ r:acuan.e.r, c:4 } }
+        });
+
+        // Baris header dicari, tidak dipatok: tiap sheet menaruhnya di baris berbeda.
+        let hdr = -1;
+        for (let r = 0; r < Math.min(mentah.length, 12); r++){
+          if (norm((mentah[r]||[])[2]) === 'MODEL'){ hdr = r; break; }
+        }
+        if (hdr < 0){ dilewati.push(nama); continue; }
+
+        for (let r = hdr + 1; r < mentah.length; r++){
+          const m = mentah[r] || [];
+          const model = teksRapi(m[2]);
+          if (!model) continue;              // baris sambungan tanpa model - tidak bisa dicari
+          baris.push([ model, teksRapi(m[3]), nama, teksRapi(m[4]) ]);
+        }
       }
 
       if (!baris.length){
-        tampilGalat('Sheet <b>' + SHEET + '</b> ada, tapi tidak ada baris data mulai baris ' +
-                    BARIS_MULAI + '. Periksa lagi berkasnya.');
+        tampilGalat('Tidak ada baris data yang terbaca. Pastikan berkasnya benar — ' +
+                    'tiap sheet harus punya kolom <b>MODEL</b> dan <b>NO RAK</b>.');
         return;
       }
 
-      DATA = { waktu: Date.now(), namaFile: file.name, baris: baris };
+      DATA = { waktu:Date.now(), namaFile:file.name, baris:baris };
       simpanData();
+      isiPilihanArea();
       tampilPanelCari();
+      if (dilewati.length){
+        tampilGalat('Catatan: ' + dilewati.length + ' sheet dilewati karena tidak punya ' +
+                    'kolom MODEL — ' + escHtml(dilewati.join(', ')) + '.');
+      }
       $('cari').focus();
     }catch(err){
       tampilGalat('Gagal membaca berkas: ' + escHtml(err.message) +
@@ -380,45 +361,35 @@ function bacaBerkas(file){
 }
 
 function simpanData(){
-  try{
-    localStorage.setItem(KUNCI_SIMPAN, JSON.stringify(DATA));
-  }catch(err){
-    // Kuota localStorage biasanya ~5 MB. Data tetap bisa dipakai di sesi ini,
-    // cuma tidak bertahan setelah halaman ditutup - katakan apa adanya.
-    tampilGalat('Data berhasil dibaca tapi <b>tidak bisa disimpan</b> di browser ' +
-                '(penyimpanan penuh). Pencarian tetap jalan sekarang, tapi kamu ' +
-                'perlu memuat berkasnya lagi setelah halaman ditutup.');
+  try{ localStorage.setItem(KUNCI_SIMPAN, JSON.stringify(DATA)); }
+  catch(err){
+    tampilGalat('Data terbaca tapi <b>tidak bisa disimpan</b> di browser (penyimpanan penuh). ' +
+                'Pencarian tetap jalan sekarang, tapi berkasnya perlu dimuat lagi ' +
+                'setelah halaman ditutup.');
   }
 }
-
 function muatDariSimpanan(){
   try{
     const s = localStorage.getItem(KUNCI_SIMPAN);
     if (!s) return false;
     const d = JSON.parse(s);
     if (!d || !Array.isArray(d.baris) || !d.baris.length) return false;
-    DATA = d;
-    return true;
+    DATA = d; return true;
   }catch(err){ return false; }
 }
 
-/* Urutan sumber data, dari yang paling tidak merepotkan pemakai:
-     1. data.js yang ikut di repo  -> buka link, langsung bisa dicari
-     2. berkas yang pernah dimuat sendiri (localStorage)
-     3. belum ada apa-apa          -> minta pilih berkas */
+/* Urutan sumber data: data bawaan repo -> berkas yang pernah dimuat sendiri. */
 function ambilSumberData(){
   if (Array.isArray(window.DATA_RAK) && window.DATA_RAK.length){
     DATA = {
       waktu: window.DATA_RAK_WAKTU ? Date.parse(window.DATA_RAK_WAKTU) : Date.now(),
-      namaFile: 'data bawaan',
-      baris: window.DATA_RAK,
-      dariRepo: true
+      namaFile: 'data bawaan', baris: window.DATA_RAK, dariRepo: true
     };
-    // Berkas yang dimuat sendiri lebih baru daripada data bawaan -> pakai itu.
-    const simpanan = localStorage.getItem(KUNCI_SIMPAN);
-    if (simpanan){
+    const s = localStorage.getItem(KUNCI_SIMPAN);
+    if (s){
       try{
-        const d = JSON.parse(simpanan);
+        const d = JSON.parse(s);
+        // Berkas yang dimuat sendiri lebih baru -> itu yang dipakai
         if (d && Array.isArray(d.baris) && d.baris.length && d.waktu > DATA.waktu) DATA = d;
       }catch(err){ /* abaikan simpanan rusak */ }
     }
@@ -427,23 +398,17 @@ function ambilSumberData(){
   return muatDariSimpanan();
 }
 
-/* Membuat berkas data.js siap tempel ke folder rak_ec/ - supaya tidak perlu
-   menyalin ribuan baris dengan tangan. */
+/* Membuat data.js siap tempel - supaya tidak perlu menyalin ribuan baris manual. */
 function eksporDataJs(){
   const isi =
-    '/* Data List-PH untuk halaman Cari Lokasi Rak E/C.\n' +
-    '   Dibuat otomatis lewat tombol "Ekspor data.js" pada ' +
-        new Date().toLocaleString('id-ID') + '.\n' +
-    '   Cara memperbarui: buka halaman, klik "Perbarui data", pilih .xlsm yang baru,\n' +
-    '   lalu klik "Ekspor data.js" dan timpa berkas ini.\n' +
-    '   Urutan kolom: NO, PART EC, KLASIFIKASI, HARNESS, MAKER, LOKASI RAK, QTY, KETERANGAN */\n' +
+    '/* Daftar E/C Board untuk halaman Cari Lokasi Rak E/C.\n' +
+    '   Dibuat otomatis lewat tombol "Ekspor data.js" pada ' + new Date().toLocaleString('id-ID') + '.\n' +
+    '   Urutan kolom: [ MODEL, NO RAK, AREA (nama sheet), KETERANGAN ] */\n' +
     'window.DATA_RAK_WAKTU = ' + JSON.stringify(new Date().toISOString()) + ';\n' +
     'window.DATA_RAK = ' + JSON.stringify(DATA.baris) + ';\n';
-
   const blob = new Blob([isi], { type:'application/javascript' });
   const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = 'data.js';
+  a.href = URL.createObjectURL(blob); a.download = 'data.js';
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(a.href), 2000);
 }
@@ -451,33 +416,27 @@ function eksporDataJs(){
 /* =====================================================================
    TAMPILAN
    ===================================================================== */
-function umurHari(){
-  return Math.floor((Date.now() - DATA.waktu) / 86400000);
-}
-function kataUmur(h){
-  if (h <= 0) return 'hari ini';
-  if (h === 1) return 'kemarin';
-  return h + ' hari lalu';
+function umurHari(){ return Math.floor((Date.now() - DATA.waktu) / 86400000); }
+function kataUmur(h){ return h <= 0 ? 'hari ini' : (h === 1 ? 'kemarin' : h + ' hari lalu'); }
+
+function isiPilihanArea(){
+  const daftar = [...new Set(DATA.baris.map(b => b[KOL.area]))].sort();
+  const sel = $('area');
+  sel.innerHTML = '<option value="">Semua area (' + daftar.length + ')</option>' +
+    daftar.map(a => '<option value="' + escHtml(a) + '">' + escHtml(a) + '</option>').join('');
 }
 
 function tampilPanelCari(){
   $('panelMuat').style.display = 'none';
   $('panelCari').style.display = 'block';
-
   const h = umurHari();
-  const bar = $('barData');
-  bar.className = 'bar-data ' + (h >= UMUR_BASI ? 'basi' : 'siap');
-
-  // Umur data ditulis jelas: lokasi rak yang sudah dipindah tapi datanya basi
-  // akan mengirim orang ke rak yang salah. Lebih baik dia tahu sejak awal.
+  $('barData').className = 'bar-data ' + (h >= UMUR_BASI ? 'basi' : 'siap');
   $('infoData').innerHTML =
-    '<b>' + DATA.baris.length.toLocaleString('id-ID') + '</b> baris · ' +
+    '<b>' + DATA.baris.length.toLocaleString('id-ID') + '</b> model · ' +
     escHtml(DATA.namaFile) + ' · ' + (DATA.dariRepo ? 'diperbarui ' : 'dimuat ') +
     (h >= UMUR_BASI ? '<span class="umur">' + kataUmur(h) + '</span>' : kataUmur(h));
-
   cariSekarang();
 }
-
 function tampilPanelMuat(){
   $('panelCari').style.display = 'none';
   $('panelMuat').style.display = 'block';
@@ -485,24 +444,19 @@ function tampilPanelMuat(){
 
 /* =====================================================================
    PENCARIAN
-   =====================================================================
-   Aturannya sengaja disamakan dengan cari_bebas() di excel_writer.py supaya
-   hasilnya konsisten dengan halaman cari_lokasi.html yang sudah dipakai:
-   cocok SUBSTRING di PART NUMBER E/C atau CONNECTOR HARNESS, minimal 3 huruf,
-   diurutkan persis > awalan > sekadar mengandung. */
+   ===================================================================== */
 function cariSekarang(){
   const mentah = $('cari').value;
-  const kunci = norm(mentah);
-  const wadah = $('hasil');
+  const kunci  = norm(mentah);
+  const area   = $('area').value;
+  const wadah  = $('hasil');
   $('btnBersih').style.display = mentah ? 'block' : 'none';
 
   if (kunci.length < MIN_HURUF){
-    $('infoCari').textContent = kunci.length
-      ? 'Ketik minimal ' + MIN_HURUF + ' huruf/angka.'
-      : '';
+    $('infoCari').textContent = kunci.length ? 'Ketik minimal ' + MIN_HURUF + ' huruf/angka.' : '';
     wadah.innerHTML = kunci.length ? '' :
       '<div class="kosong"><span class="ikon">🔎</span>' +
-      'Ketik sebagian part number di atas.<br>' +
+      'Ketik sebagian nomor model di atas.<br>' +
       'Boleh potongan tengahnya saja, tidak harus dari awal.</div>';
     return;
   }
@@ -510,58 +464,50 @@ function cariSekarang(){
   const cocok = [];
   for (let i = 0; i < DATA.baris.length; i++){
     const b = DATA.baris[i];
-    const ec = norm(b[KOL.partEc]);
-    const hn = norm(b[KOL.harness]);
-    const diEc = ec !== '' && ec.indexOf(kunci) >= 0;
-    const diHn = hn !== '' && hn.indexOf(kunci) >= 0;
-    if (!diEc && !diHn) continue;
+    if (area && b[KOL.area] !== area) continue;
+    const m = norm(b[KOL.model]);
+    if (m.indexOf(kunci) < 0) continue;
 
-    let skor = 0;
-    for (const [nilai, ikut] of [[ec, diEc], [hn, diHn]]){
-      if (!ikut) continue;
-      if (nilai === kunci) skor = Math.max(skor, 3);
-      else if (nilai.indexOf(kunci) === 0) skor = Math.max(skor, 2);
-      else skor = Math.max(skor, 1);
-    }
+    // Banyak model ditulis sebagai gabungan dipisah '/', mis.
+    // "2216423-01/2216429-01". Potongan yang PERSIS sama dengan salah satu
+    // bagiannya diperlakukan sekuat kecocokan persis - kalau tidak, mengetik
+    // nomor lengkap yang benar malah kalah urutan dari kecocokan sebagian.
+    let skor = 1;
+    if (m === kunci) skor = 3;
+    else if (m.split('/').some(x => x.trim() === kunci)) skor = 3;
+    else if (m.indexOf(kunci) === 0) skor = 2;
+
     cocok.push({ skor, i, b });
   }
-
-  cocok.sort((x, y) => (y.skor - x.skor) || (x.i - y.i));
+  cocok.sort((x,y) => (y.skor - x.skor) || (x.i - y.i));
 
   if (!cocok.length){
     $('infoCari').textContent = '';
-    wadah.innerHTML =
-      '<div class="kosong"><span class="ikon">🗂️</span>' +
-      'Tidak ada yang cocok dengan <b>' + escHtml(mentah.trim()) + '</b>.<br>' +
-      'Coba potongan yang lebih pendek, atau cek lagi ejaannya.</div>';
+    wadah.innerHTML = '<div class="kosong"><span class="ikon">🗂️</span>' +
+      'Tidak ada model yang cocok dengan <b>' + escHtml(mentah.trim()) + '</b>' +
+      (area ? ' di area <b>' + escHtml(area) + '</b>' : '') + '.<br>' +
+      (area ? 'Coba pilih "Semua area", atau ' : 'Coba ') +
+      'potongan yang lebih pendek.</div>';
     return;
   }
 
   const tampil = cocok.slice(0, MAKS_HASIL);
-  $('infoCari').textContent =
-    cocok.length + ' hasil' + (cocok.length > MAKS_HASIL ? ' — ditampilkan ' + MAKS_HASIL + ' teratas' : '');
+  $('infoCari').textContent = cocok.length + ' hasil' +
+    (cocok.length > MAKS_HASIL ? ' — ditampilkan ' + MAKS_HASIL + ' teratas' : '');
 
   wadah.innerHTML = tampil.map(({ skor, b }) => {
-    const rak  = b[KOL.lokasi];
-    const qty  = b[KOL.qty];
-    const qtyN = parseFloat(String(qty).replace(',', '.'));
-    const meta = [];
-    if (b[KOL.maker])       meta.push('<span class="cip">Maker <b>' + escHtml(b[KOL.maker]) + '</b></span>');
-    if (b[KOL.klasifikasi]) meta.push('<span class="cip">' + escHtml(b[KOL.klasifikasi]) + '</span>');
-    if (qty !== '')         meta.push('<span class="cip' + (qtyN === 0 ? ' qty-nol' : '') +
-                                      '">Qty <b>' + escHtml(qty) + '</b></span>');
-    if (b[KOL.keterangan])  meta.push('<span class="cip">' + escHtml(b[KOL.keterangan]) + '</span>');
-
+    const rak = b[KOL.rak];
+    const meta = ['<span class="cip area">' + escHtml(b[KOL.area]) + '</span>'];
+    if (b[KOL.ket]) meta.push('<span class="cip">' + escHtml(b[KOL.ket]) + '</span>');
     return '<article class="baris' + (skor === 3 ? ' persis' : '') + '">' +
       '<div class="rak">' +
         (rak ? '<div class="angka">' + escHtml(rak) + '</div>'
-             : '<div class="angka kosong">—</div>') +
+             : '<div class="angka kosong">belum ada</div>') +
         '<div class="label">No Rak</div>' +
       '</div>' +
       '<div class="rincian">' +
-        '<div class="part">' + sorot(b[KOL.partEc] || '(tanpa part number)', kunci) + '</div>' +
-        (b[KOL.harness] ? '<div class="harness">↳ ' + sorot(b[KOL.harness], kunci) + '</div>' : '') +
-        (meta.length ? '<div class="meta">' + meta.join('') + '</div>' : '') +
+        '<div class="model">' + sorot(b[KOL.model], kunci) + '</div>' +
+        '<div class="meta">' + meta.join('') + '</div>' +
       '</div>' +
     '</article>';
   }).join('');
@@ -572,19 +518,17 @@ function cariSekarang(){
    ===================================================================== */
 let jedaCari = null;
 $('cari').addEventListener('input', () => {
-  clearTimeout(jedaCari);
-  jedaCari = setTimeout(cariSekarang, 120);   // jeda kecil: mengetik jadi tidak tersendat
+  clearTimeout(jedaCari); jedaCari = setTimeout(cariSekarang, 120);
 });
-$('btnBersih').addEventListener('click', () => {
-  $('cari').value = ''; $('cari').focus(); cariSekarang();
-});
+$('area').addEventListener('change', cariSekarang);
+$('btnBersih').addEventListener('click', () => { $('cari').value=''; $('cari').focus(); cariSekarang(); });
 $('btnPilih').addEventListener('click', () => $('berkas').click());
 $('btnPerbarui').addEventListener('click', () => $('berkas').click());
 $('btnEkspor').addEventListener('click', eksporDataJs);
 $('berkas').addEventListener('change', (e) => {
   const f = e.target.files && e.target.files[0];
   if (f) bacaBerkas(f);
-  e.target.value = '';        // supaya memilih berkas yang SAMA lagi tetap memicu 'change'
+  e.target.value = '';   // supaya memilih berkas yang SAMA lagi tetap memicu 'change'
 });
 
 /* =====================================================================
@@ -592,7 +536,6 @@ $('berkas').addEventListener('change', (e) => {
    ===================================================================== */
 function muatXLSX(lanjut){
   if (typeof XLSX !== 'undefined'){ lanjut(); return; }
-  // Berkas lokal tidak ada -> coba CDN sebagai cadangan.
   const s = document.createElement('script');
   s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
   s.onload = lanjut;
@@ -605,7 +548,7 @@ function muatXLSX(lanjut){
 }
 
 muatXLSX(() => {
-  if (ambilSumberData()) tampilPanelCari();
+  if (ambilSumberData()){ isiPilihanArea(); tampilPanelCari(); }
   else tampilPanelMuat();
 });
 </script>
