@@ -1,0 +1,1335 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Scan QR &rarr; Excel</title>
+<style>
+  :root{
+    --bg:#0f172a; --card:#1e293b; --accent:#22c55e; --accent2:#16a34a;
+    --text:#f1f5f9; --muted:#94a3b8; --danger:#ef4444; --warn:#f59e0b; --line:#334155;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+       min-height:100vh;padding:14px;}
+  h1{font-size:18px;margin:0 0 12px;text-align:center;font-weight:600}
+  .nav-dashboard{display:flex;align-items:center;justify-content:center;gap:7px;
+                 width:fit-content;margin:0 auto 14px;padding:8px 18px;
+                 font-size:12.5px;font-weight:600;color:var(--text);text-decoration:none;
+                 background:linear-gradient(145deg,var(--card),#16233a);
+                 border:1px solid var(--line);border-radius:999px;
+                 box-shadow:0 2px 10px rgba(0,0,0,.3);
+                 transition:transform .15s ease,border-color .15s ease,box-shadow .15s ease,background .15s ease}
+  .nav-dashboard .ico{font-size:14px;transition:transform .15s ease}
+  .nav-dashboard:active{transform:scale(.95)}
+  @media (hover:hover){
+    .nav-dashboard:hover{border-color:var(--accent);background:linear-gradient(145deg,#243349,#16233a);
+                          box-shadow:0 4px 16px rgba(34,197,94,.3)}
+    .nav-dashboard:hover .ico{transform:translateX(-3px)}
+  }
+  .status{display:flex;align-items:center;justify-content:center;gap:6px;font-size:12px;color:var(--muted);
+          margin-bottom:12px;flex-wrap:wrap}
+  #btnJalur{width:auto;margin:0;padding:4px 10px;font-size:11px;font-weight:400;
+            background:#0b1220;color:var(--muted);border:1px solid var(--line);border-radius:8px}
+  #barisAlamat{display:flex;gap:8px;margin-bottom:12px}
+  #barisAlamat input{flex:1;font-size:14px;padding:10px}
+  #btnAlamat{width:auto;margin:0;padding:10px 16px;font-size:14px;
+             background:#334155;color:var(--text)}
+  .dot{width:9px;height:9px;border-radius:50%;flex-shrink:0;background:var(--danger);transition:background .25s ease}
+  .dot.checking{background:#94a3b8;animation:dotChecking 1.2s ease-in-out infinite}
+  .dot.local{background:var(--accent);box-shadow:0 0 0 3px rgba(34,197,94,.2)}
+  .dot.broker{background:#38bdf8;animation:dotBroker 2s ease-in-out infinite}
+  .dot.off{background:var(--danger);animation:dotOff 1s ease-in-out infinite}
+  @keyframes dotChecking{0%,100%{opacity:1}50%{opacity:.3}}
+  @keyframes dotBroker{0%,100%{box-shadow:0 0 0 0 rgba(56,189,248,.5)}50%{box-shadow:0 0 0 5px rgba(56,189,248,0)}}
+  @keyframes dotOff{0%,100%{opacity:1}50%{opacity:.25}}
+  .card{background:var(--card);border-radius:16px;padding:14px;margin-bottom:12px;border:1px solid var(--line)}
+  #video-wrap{position:relative;border-radius:12px;overflow:hidden;background:#000;aspect-ratio:1/1;max-width:420px;margin:0 auto}
+  video{width:100%;height:100%;object-fit:cover;display:block}
+  #reticle{position:absolute;inset:12%;border:3px solid var(--accent);border-radius:16px;box-shadow:0 0 0 999px rgba(0,0,0,.35);pointer-events:none}
+  #scanMsg{position:absolute;bottom:8px;left:0;right:0;text-align:center;font-size:12px;color:#fff;text-shadow:0 1px 2px #000}
+  label{display:block;font-size:12px;color:var(--muted);margin:10px 0 4px}
+  input[type=text], input[type=number]{
+    width:100%;padding:12px;border-radius:10px;border:1px solid var(--line);
+    background:#0b1220;color:var(--text);font-size:16px;
+  }
+  input:focus{outline:2px solid var(--accent)}
+  .row{display:flex;gap:8px}
+  .row > *{flex:1}
+  button{
+    width:100%;padding:14px;border:none;border-radius:12px;font-size:16px;font-weight:600;
+    margin-top:12px;cursor:pointer;
+  }
+  #btnSend{background:var(--accent);color:#03170a}
+  #btnSend:disabled{background:#334155;color:#64748b}
+  #btnManual{background:#334155;color:var(--text)}
+  #btnRescan{background:#334155;color:var(--text)}
+  /* ---------- POPUP (dipakai untuk semua pesan penting: sukses/gagal/peringatan) ----------
+     Kenapa popup, bukan teks kecil di sudut layar: operator men-scan cepat sambil
+     mata di kamera, bukan di teks kecil di bawah tombol - pesan penting gampang
+     kelewat kalau cuma ganti warna teks. Popup ada di tengah layar, tidak bisa
+     tidak terlihat. */
+  .popup-overlay{
+    position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:1000;
+    display:flex;align-items:center;justify-content:center;padding:24px;
+    opacity:0;pointer-events:none;transition:opacity .15s ease;
+  }
+  .popup-overlay.show{opacity:1;pointer-events:auto}
+  .popup-box{
+    background:var(--card);border:1px solid var(--line);border-radius:16px;
+    width:100%;max-width:340px;padding:22px 20px;text-align:center;
+    box-shadow:0 12px 40px rgba(0,0,0,.5);
+    transform:scale(.9);transition:transform .15s ease;
+  }
+  .popup-overlay.show .popup-box{transform:scale(1)}
+  .popup-icon{font-size:38px;line-height:1;margin-bottom:10px}
+  .popup-title{font-size:17px;font-weight:700;margin-bottom:6px}
+  .popup-msg{font-size:14px;color:var(--muted);line-height:1.55;white-space:pre-line}
+  .popup-box.ok .popup-title{color:var(--accent)}
+  .popup-box.err .popup-title{color:var(--danger)}
+  .popup-box.warn .popup-title{color:var(--warn)}
+  .popup-btn{
+    margin-top:18px;width:100%;padding:13px;border:none;border-radius:12px;
+    font-size:15px;font-weight:600;cursor:pointer;
+  }
+  .popup-box.ok .popup-btn{background:var(--accent);color:#03170a}
+  .popup-box.err .popup-btn{background:var(--danger);color:#fff}
+  .popup-box.warn .popup-btn{background:var(--warn);color:#1a1300}
+  .popup-box.info .popup-btn{background:#334155;color:var(--text)}
+  .log{max-height:180px;overflow-y:auto;font-size:12px}
+  .log-item{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--line);color:var(--muted)}
+  .log-item b{color:var(--text)}
+  .badge{font-size:10px;padding:1px 6px;border-radius:6px}
+  .badge.ok{background:#052e16;color:#4ade80}
+  .badge.err{background:#450a0a;color:#fca5a5}
+  .hint{font-size:11px;color:var(--muted);text-align:center;margin-top:4px}
+  #kodeBox{font-size:15px;font-weight:600;word-break:break-all;padding:10px;background:#0b1220;border-radius:10px;min-height:20px}
+
+  .lookup-status{font-size:12px;margin-top:6px;min-height:16px}
+  .lookup-status.cari{color:var(--warn)}
+  .lookup-status.ada{color:var(--accent)}
+  .lookup-status.kosong{color:var(--danger)}
+
+  #masterBox{margin-top:10px;background:#0b1220;border-radius:10px;padding:6px 10px}
+  .mrow{display:flex;justify-content:space-between;gap:10px;padding:6px 0;border-bottom:1px solid var(--line);font-size:13px}
+  .mrow:last-child{border-bottom:none}
+  .mrow span{color:var(--muted)}
+  .mrow b{text-align:right;word-break:break-all}
+
+  .modes{display:flex;gap:6px}
+  .mode{flex:1;padding:10px 6px;margin:0;background:#0b1220;color:var(--muted);
+        border:1px solid var(--line);border-radius:10px;font-size:13px}
+  .mode.active{background:var(--accent);color:#03170a;border-color:var(--accent)}
+
+  .preview{padding:12px;border-radius:10px;background:#0b1220;border:1px solid var(--line);
+           font-size:16px;font-weight:700}
+
+  #pilihList button{margin-top:6px;text-align:left;background:#0b1220;color:var(--text);
+                    border:1px solid var(--line);font-weight:400;font-size:13px;padding:10px}
+  #pilihList button.dipilih{border-color:var(--accent);color:var(--accent)}
+
+  details#manualFields{margin-top:12px;border:1px solid var(--line);border-radius:10px;padding:8px 10px}
+  details#manualFields summary{font-size:12px;color:var(--muted);cursor:pointer}
+
+  .gambar-row{display:flex;gap:8px}
+  .gambar-row a{
+    flex:1;display:flex;align-items:center;justify-content:center;gap:6px;
+    padding:12px 8px;border-radius:10px;font-size:13px;font-weight:600;
+    text-decoration:none;border:1px solid var(--line);background:#0b1220;
+  }
+  .gambar-row a.google{color:#8ab4f8}
+  .gambar-row a.bing{color:#7dd3fc}
+  .gambar-row a.digikey{color:#fbbf24}
+  .gambar-row a:active{opacity:.8}
+</style>
+</head>
+<body>
+
+<a class="nav-dashboard" href="index.html"><span class="ico">🏠</span> Dashboard</a>
+<h1>&#128241; Scan QR &rarr; Excel (list poshheader.xlsm)</h1>
+<div class="status">
+  <span class="dot checking" id="dot"></span><span id="statusText">Mengecek koneksi...</span>
+  <button id="btnJalur" type="button">Pindah jalur</button>
+</div>
+
+<!-- Muncul kalau belum tersambung langsung ke PC. Isi IP PC-nya sekali,
+     tersimpan di HP, supaya data lewat jaringan lokal (cepat) bukan broker. -->
+<div id="barisAlamat" style="display:none">
+  <input type="text" id="inputAlamat" placeholder="Alamat PC, mis. 192.168.137.1" inputmode="decimal">
+  <button id="btnAlamat" type="button">Sambung</button>
+</div>
+
+<div class="card">
+  <div id="video-wrap">
+    <video id="video" playsinline autoplay muted></video>
+    <div id="reticle"></div>
+    <div id="scanMsg">Arahkan kamera ke QR code</div>
+  </div>
+  <canvas id="canvas" style="display:none"></canvas>
+  <div class="hint">Kalau tidak terbaca-baca: ketuk area kamera untuk fokus ulang, jaga jarak ±10-15cm, pastikan cukup cahaya.</div>
+  <div class="hint" id="camHint"></div>
+  <div style="display:flex;align-items:center;gap:8px;justify-content:center;margin-top:8px">
+    <canvas id="diagCanvas" width="120" height="120"
+            style="width:70px;height:70px;border:1px solid var(--line);border-radius:6px;background:#000"></canvas>
+    <div class="hint" id="debugInfo" style="opacity:.7;text-align:left;margin:0">Loop scan: menunggu kamera...</div>
+  </div>
+  <button id="btnRescan">🔄 Scan Ulang</button>
+</div>
+
+<div class="card">
+  <label>Part Number untuk E/C (dari scan QR)</label>
+  <div id="kodeBox">&mdash;</div>
+  <div id="lookupStatus" class="lookup-status"></div>
+
+  <!-- Muncul kalau satu part number ketemu di lebih dari satu baris List-PH -->
+  <div id="pilihBaris" style="display:none">
+    <label>Ketemu di beberapa baris — pilih yang benar:</label>
+    <div id="pilihList"></div>
+  </div>
+
+  <div id="masterBox" style="display:none">
+    <div class="mrow"><span>Part No. di List-PH</span><b id="mPartEc">—</b></div>
+    <div class="mrow"><span>Klasifikasi</span><b id="mKlasifikasi">—</b></div>
+    <div class="mrow"><span>Connector Harness</span><b id="mHarness">—</b></div>
+    <div class="mrow"><span>Maker</span><b id="mMaker">—</b></div>
+    <div class="mrow"><span>Lokasi Rak</span><b id="mLokasi">—</b></div>
+    <div class="mrow"><span>Qty tercatat</span><b id="mQty">—</b></div>
+    <div class="mrow"><span>Baris di List-PH</span><b id="mRow">—</b></div>
+  </div>
+
+  <!-- Bantuan visual: buka hasil pencarian GAMBAR ASLI (Google/Bing Images) di
+       tab baru, dengan query otomatis dari maker + nomor part connector-nya -
+       supaya operator bisa mencocokkan BENTUK FISIK konektor yang dipegang
+       dengan foto katalog aslinya, bukan cuma percaya teks. Query ikut update
+       kalau field Maker/Connector Harness diisi/diedit manual (lihat
+       perbaruiPencarianGambar()). -->
+  <div id="gambarBox" style="display:none">
+    <div class="hint" style="text-align:left;margin:10px 0 6px">
+      🔎 Cek bentuk konektor <b id="gambarMaker">—</b> · <span id="gambarKode">—</span>
+    </div>
+    <div class="gambar-row">
+      <a id="linkGambarGoogle" href="#" target="_blank" rel="noopener noreferrer" class="google">🔎 Google Gambar</a>
+      <a id="linkGambarBing" href="#" target="_blank" rel="noopener noreferrer" class="bing">🔎 Bing Gambar</a>
+      <a id="linkGambarDigikey" href="#" target="_blank" rel="noopener noreferrer" class="digikey">🔎 DigiKey</a>
+    </div>
+    <div class="hint">Dibuka di tab baru - hasil gambar asli dari web, bukan cuma jepretan kecil di sini. DigiKey khusus cari lewat nomor part distributor (foto produk resmi).</div>
+  </div>
+
+  <label>Aksi Qty</label>
+  <div class="modes">
+    <button type="button" class="mode active" data-mode="set">Ganti jadi</button>
+    <button type="button" class="mode" data-mode="add">Tambah +</button>
+    <button type="button" class="mode" data-mode="sub">Kurangi −</button>
+  </div>
+
+  <div class="row">
+    <div>
+      <label>Qty</label>
+      <input type="number" id="qty" value="1" min="0" step="1" inputmode="numeric">
+    </div>
+    <div>
+      <label>Hasil nanti</label>
+      <div id="qtyPreview" class="preview">—</div>
+    </div>
+  </div>
+
+  <details id="manualFields">
+    <summary>Isi manual (kalau part belum ada di List-PH)</summary>
+    <div class="row">
+      <div>
+        <label>Lokasi Rak</label>
+        <input type="text" id="lokasi" placeholder="mis. A-01">
+      </div>
+      <div>
+        <label>Maker</label>
+        <input type="text" id="maker" placeholder="mis. JST / Molex">
+      </div>
+    </div>
+    <div class="row">
+      <div>
+        <label>Connector Harness</label>
+        <input type="text" id="partHarness" placeholder="mis. PHR-4">
+      </div>
+      <div>
+        <label>Klasifikasi</label>
+        <input type="text" id="klasifikasi" placeholder="mis. Header">
+      </div>
+    </div>
+  </details>
+
+  <div class="row">
+    <div>
+      <label>Keterangan (opsional)</label>
+      <input type="text" id="keterangan" placeholder="catatan tambahan">
+    </div>
+    <div>
+      <label>Nama Perangkat</label>
+      <input type="text" id="perangkat" placeholder="mis. HP-Gudang-1">
+    </div>
+  </div>
+
+  <button id="btnSend" disabled>Kirim ke Excel</button>
+</div>
+
+<div class="card">
+  <label style="margin-top:0">Input Manual (kalau kamera tidak bisa baca)</label>
+  <input type="text" id="manualKode" placeholder="Ketik / tempel kode QR di sini">
+  <button id="btnManual">Pakai Kode Manual Ini</button>
+</div>
+
+<div class="card">
+  <label style="margin-top:0">Riwayat Kiriman (sesi ini)</label>
+  <div class="log" id="log"><span class="hint">Belum ada data terkirim.</span></div>
+</div>
+
+<!-- Popup pesan penting: sukses, gagal, peringatan. Satu komponen dipakai untuk
+     semua pesan yang sebelumnya cuma teks kecil (toast, camHint, dsb) - lihat
+     showPopup() di script bawah. -->
+<div class="popup-overlay" id="popupOverlay">
+  <div class="popup-box" id="popupBox">
+    <div class="popup-icon" id="popupIcon">ℹ️</div>
+    <div class="popup-title" id="popupTitle">Info</div>
+    <div class="popup-msg" id="popupMsg"></div>
+    <button class="popup-btn" id="popupBtn" type="button">Mengerti</button>
+  </div>
+</div>
+
+<script src="jsQR.lib.js"></script>
+<script>
+// Muat library MQTT: coba file lokal dulu (offline), kalau gagal (404/rusak/
+// server belum sempat serve file barunya) otomatis coba dari CDN sebagai cadangan.
+function loadScript(src, onload, onerror){
+  const s = document.createElement('script');
+  s.src = src;
+  s.onload = onload;
+  s.onerror = onerror;
+  document.head.appendChild(s);
+}
+</script>
+<script>
+// HARUS SAMA PERSIS dengan BROKER_HOST/PORT/TOPIC di mqtt_subscriber.py (PC)
+const MQTT_BROKER_URL = 'wss://broker.emqx.io:8084/mqtt';
+const MQTT_TOPIC = 'poshheader/qrscan/883f4243';
+// Topic dua arah: HP tanya -> PC cari di List-PH -> PC jawab
+const T_LOOKUP_REQ = MQTT_TOPIC + '/lookup/req';
+const T_LOOKUP_RES = MQTT_TOPIC + '/lookup/res';
+const T_SAVE_RES   = MQTT_TOPIC + '/save/res';
+
+const video = document.getElementById('video');
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d', { willReadFrequently: true });
+const kodeBox = document.getElementById('kodeBox');
+const btnSend = document.getElementById('btnSend');
+const btnRescan = document.getElementById('btnRescan');
+const btnManual = document.getElementById('btnManual');
+const manualKode = document.getElementById('manualKode');
+const logEl = document.getElementById('log');
+const camHint = document.getElementById('camHint');
+const debugInfo = document.getElementById('debugInfo');
+const diagCanvas = document.getElementById('diagCanvas');
+const diagCtx = diagCanvas.getContext('2d', { willReadFrequently: true });
+const lookupStatus = document.getElementById('lookupStatus');
+const masterBox = document.getElementById('masterBox');
+const pilihBaris = document.getElementById('pilihBaris');
+const pilihList = document.getElementById('pilihList');
+const manualFields = document.getElementById('manualFields');
+const gambarBox = document.getElementById('gambarBox');
+const gambarMaker = document.getElementById('gambarMaker');
+const gambarKode = document.getElementById('gambarKode');
+const linkGambarGoogle = document.getElementById('linkGambarGoogle');
+const linkGambarBing = document.getElementById('linkGambarBing');
+const linkGambarDigikey = document.getElementById('linkGambarDigikey');
+const inputMaker = document.getElementById('maker');
+const inputPartHarness = document.getElementById('partHarness');
+const inputKlasifikasi = document.getElementById('klasifikasi');
+const qtyPreview = document.getElementById('qtyPreview');
+const mKlasifikasi = document.getElementById('mKlasifikasi');
+const mHarness = document.getElementById('mHarness');
+const mMaker = document.getElementById('mMaker');
+const mLokasi = document.getElementById('mLokasi');
+const mQty = document.getElementById('mQty');
+const mRow = document.getElementById('mRow');
+const dot = document.getElementById('dot');
+const statusText = document.getElementById('statusText');
+// Satu titik kebenaran untuk warna/animasi indikator koneksi, dipakai di
+// semua transisi status supaya jelas bedanya: 'checking' (abu, berkedip
+// pelan = sedang mencoba), 'local' (hijau solid = jalur lokal stabil),
+// 'broker' (biru berdenyut = tersambung tapi lewat internet), 'off' (merah
+// berkedip = terputus/error, butuh perhatian).
+function setDotState(state){
+  dot.className = 'dot ' + state;
+}
+const scanMsg = document.getElementById('scanMsg');
+const btnJalur = document.getElementById('btnJalur');
+const barisAlamat = document.getElementById('barisAlamat');
+const inputAlamat = document.getElementById('inputAlamat');
+const btnAlamat = document.getElementById('btnAlamat');
+
+let currentKode = null;
+let scanning = true;
+let stream = null;
+let historyCount = 0;
+
+// ============ POPUP PESAN PENTING ============
+// Satu komponen dipakai untuk SEMUA pesan yang perlu diperhatikan operator:
+// sukses kirim, gagal koneksi, peringatan data meragukan, dsb. Dipusatkan di
+// sini (bukan tersebar sebagai teks kecil di berbagai tempat) supaya:
+//   - selalu di tengah layar -> tidak mungkin kelewat saat mata di kamera
+//   - kalau ada 2 pesan hampir bersamaan, DIBARISKAN (bukan tumpang tindih)
+//   - pesan gagal/peringatan HARUS diketuk "Mengerti" dulu (tidak hilang
+//     sendiri) - pesan sukses hilang otomatis biar tidak menghambat scan cepat
+const popupOverlay = document.getElementById('popupOverlay');
+const popupBox = document.getElementById('popupBox');
+const popupIcon = document.getElementById('popupIcon');
+const popupTitle = document.getElementById('popupTitle');
+const popupMsg = document.getElementById('popupMsg');
+const popupBtn = document.getElementById('popupBtn');
+
+const POPUP_IKON = { ok: '✅', err: '⛔', warn: '⚠️', info: 'ℹ️' };
+const POPUP_JUDUL = { ok: 'Berhasil', err: 'Gagal', warn: 'Perhatian', info: 'Info' };
+
+let popupQueue = [];
+let popupSedangTampil = false;
+let popupAutoTimer = null;
+let popupTutupCallback = null;   // dijalankan TEPAT saat popup yg sedang tampil ditutup
+let popupWajibTombol = false;    // true = ketuk area luar TIDAK menutup, harus pencet tombolnya
+
+/**
+ * tipe   : 'ok' | 'err' | 'warn' | 'info'
+ * opsi.judul       : override judul default
+ * opsi.tombol      : override label tombol (default 'Mengerti')
+ * opsi.autoClose   : ms sebelum tertutup sendiri. 0 = harus diketuk manual.
+ *                    Default: 'ok' otomatis (2,2 detik), selain itu manual -
+ *                    supaya pesan gagal/peringatan tidak terlewat begitu saja.
+ * opsi.wajibTombol : true = ketuk area gelap di luar TIDAK menutup popup ini -
+ *                    HARUS pencet tombolnya. Dipakai untuk konfirmasi yang
+ *                    harus dibaca+ditindaklanjuti dengan sengaja, mis. "Scan Lagi".
+ * opsi.onTutup     : dipanggil TEPAT saat popup ini ditutup (baru setelah itu,
+ *                    bukan sebelumnya) - dipakai untuk menunda "siap scan lagi"
+ *                    sampai operator benar-benar menekan tombolnya, supaya
+ *                    tidak ada scan baru menyelinap masuk selagi popup ini
+ *                    masih menutupi layar.
+ */
+function showPopup(pesan, tipe, opsi){
+  tipe = tipe || 'info';
+  opsi = opsi || {};
+  popupQueue.push({
+    pesan,
+    tipe,
+    judul: opsi.judul || POPUP_JUDUL[tipe] || 'Info',
+    tombol: opsi.tombol || 'Mengerti',
+    autoClose: opsi.autoClose !== undefined ? opsi.autoClose : (tipe === 'ok' ? 2200 : 0),
+    wajibTombol: !!opsi.wajibTombol,
+    onTutup: opsi.onTutup || null,
+  });
+  if (navigator.vibrate && (tipe === 'err' || tipe === 'warn')) navigator.vibrate(150);
+  if (!popupSedangTampil) tampilkanPopupBerikutnya();
+}
+
+function tampilkanPopupBerikutnya(){
+  if (!popupQueue.length){ popupSedangTampil = false; popupTutupCallback = null; return; }
+  popupSedangTampil = true;
+  const p = popupQueue.shift();
+  popupBox.className = 'popup-box ' + p.tipe;
+  popupIcon.textContent = POPUP_IKON[p.tipe] || 'ℹ️';
+  popupTitle.textContent = p.judul;
+  popupMsg.textContent = p.pesan;
+  popupBtn.textContent = p.tombol;
+  popupTutupCallback = p.onTutup;
+  popupWajibTombol = p.wajibTombol;
+  popupOverlay.classList.add('show');
+  clearTimeout(popupAutoTimer);
+  if (p.autoClose > 0) popupAutoTimer = setTimeout(tutupPopup, p.autoClose);
+}
+
+function tutupPopup(){
+  clearTimeout(popupAutoTimer);
+  popupOverlay.classList.remove('show');
+  const cb = popupTutupCallback;
+  popupTutupCallback = null;
+  if (cb) cb();   // baru dijalankan SEKARANG - persis saat operator menutup popup ini
+  setTimeout(tampilkanPopupBerikutnya, 180);   // jeda kecil biar transisinya halus
+}
+
+popupBtn.addEventListener('click', tutupPopup);
+// Ketuk area gelap di luar kotak juga menutup - KECUALI popup yang wajibTombol
+// (mis. konfirmasi "Scan Lagi"), supaya tidak ke-tutup tanpa sengaja sebelum
+// operator benar-benar bermaksud melanjutkan.
+popupOverlay.addEventListener('click', (e) => {
+  if (e.target === popupOverlay && !popupWajibTombol) tutupPopup();
+});
+
+function beep(){
+  try{
+    const AC = window.AudioContext || window.webkitAudioContext;
+    const ac = new AC();
+    const o = ac.createOscillator();
+    const g = ac.createGain();
+    o.connect(g); g.connect(ac.destination);
+    o.frequency.value = 880;
+    g.gain.setValueAtTime(0.15, ac.currentTime);
+    o.start();
+    o.stop(ac.currentTime + 0.12);
+  }catch(e){}
+  if (navigator.vibrate) navigator.vibrate(120);
+}
+
+// ---------- Kamera + loop scan QR ----------
+async function startCamera(){
+  if (!window.isSecureContext){
+    camHint.textContent = '⚠️ Halaman ini harus dibuka via HTTPS (bukan http) agar kamera bisa diaktifkan.';
+    scanMsg.textContent = 'Kamera tidak aktif (butuh HTTPS)';
+    showPopup('Halaman ini harus dibuka lewat HTTPS (bukan http) supaya kamera bisa aktif. '
+             + 'Untuk sementara pakai kotak "Input Manual" di bagian bawah halaman.', 'err');
+    return;
+  }
+  try{
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 1280 } },
+      audio: false
+    });
+    video.srcObject = stream;
+    await video.play();
+    applyContinuousFocus();
+    await initDetector();
+    requestAnimationFrame(tick);
+  }catch(err){
+    camHint.textContent = '⚠️ Tidak bisa akses kamera: ' + err.message + '. Pakai input manual di bawah.';
+    scanMsg.textContent = 'Kamera tidak tersedia';
+    showPopup('Tidak bisa mengakses kamera: ' + err.message
+             + '\n\nPakai kotak "Input Manual" di bagian bawah halaman untuk sementara.', 'err');
+  }
+}
+
+// Sebagian HP/browser tidak auto-fokus terus-menerus lewat getUserMedia (beda
+// dari app kamera bawaan). Ini coba paksa mode fokus & exposure kontinu kalau
+// didukung. Tidak semua device dukung - dibungkus try/catch, aman diabaikan.
+function applyContinuousFocus(){
+  try{
+    const track = stream && stream.getVideoTracks()[0];
+    if (!track || !track.getCapabilities) return;
+    const caps = track.getCapabilities();
+    const advanced = [];
+    if (caps.focusMode && caps.focusMode.includes('continuous')) advanced.push({ focusMode: 'continuous' });
+    if (caps.exposureMode && caps.exposureMode.includes('continuous')) advanced.push({ exposureMode: 'continuous' });
+    if (advanced.length) track.applyConstraints({ advanced });
+  }catch(e){ /* diamkan - bukan fatal */ }
+}
+
+// Ketuk area kamera untuk minta fokus ulang (berguna kalau gambar sempat buram).
+document.getElementById('video-wrap').addEventListener('click', () => {
+  applyContinuousFocus();
+  scanMsg.textContent = 'Fokus ulang...';
+  setTimeout(() => { if (scanning) scanMsg.textContent = 'Arahkan kamera ke QR code'; }, 800);
+});
+
+// ---------- MESIN DECODE ----------
+// Engine 1 (utama): BarcodeDetector bawaan browser/Android. Ini native (dipercepat
+//   hardware, pakai engine ML Kit/ZXing Google), JAUH lebih cepat & lebih tahan
+//   terhadap QR padat, fokus kurang tajam, miring, atau QR dari layar monitor.
+//   Bonus penting: dia baca <video> LANGSUNG, tidak lewat canvas - jadi kalau
+//   masalahnya ada di drawImage/canvas (bug di sebagian WebView Android), jalur
+//   ini tetap jalan.
+// Engine 2 (cadangan): jsQR (lewat canvas), dipakai kalau BarcodeDetector tidak ada.
+let detector = null;
+let engineName = 'jsQR (canvas)';
+let detectorFails = 0;
+
+async function initDetector(){
+  try{
+    if ('BarcodeDetector' in window){
+      const formats = await window.BarcodeDetector.getSupportedFormats();
+      if (formats && formats.includes('qr_code')){
+        detector = new window.BarcodeDetector({ formats: ['qr_code'] });
+        engineName = 'BarcodeDetector (native)';
+      }
+    }
+  }catch(e){
+    detector = null;
+  }
+}
+
+let scanAttempts = 0;
+let scanAttemptsWindowStart = performance.now();
+let busy = false;
+let lastDiag = '';
+
+// Hitung crop persegi di area kotak hijau (reticle inset 12%).
+function cropRect(vw, vh){
+  const side = Math.min(vw, vh);
+  const inset = side * 0.12;
+  return {
+    sx: (vw - side) / 2 + inset,
+    sy: (vh - side) / 2 + inset,
+    sSide: side - inset * 2
+  };
+}
+
+// Diagnostik: gambar apa yang SEBENARNYA masuk ke decoder + statistik kecerahan.
+// Kalau canvas ternyata hitam/kosong (avg≈0, min=max), berarti drawImage dari
+// video memang tidak jalan di browser ini - itu akar masalah yang beda lagi.
+function updateDiagnostics(vw, vh){
+  try{
+    const r = cropRect(vw, vh);
+    diagCanvas.width = 120; diagCanvas.height = 120;
+    diagCtx.drawImage(video, r.sx, r.sy, r.sSide, r.sSide, 0, 0, 120, 120);
+    const d = diagCtx.getImageData(0, 0, 120, 120).data;
+    let min = 255, max = 0, sum = 0;
+    for (let i = 0; i < d.length; i += 4){
+      const g = (d[i] * 0.299 + d[i+1] * 0.587 + d[i+2] * 0.114) | 0;
+      if (g < min) min = g;
+      if (g > max) max = g;
+      sum += g;
+    }
+    const avg = (sum / (d.length / 4)) | 0;
+    lastDiag = 'terang avg ' + avg + ' (min ' + min + '/max ' + max + ')';
+  }catch(e){
+    lastDiag = 'canvas ERROR: ' + e.message;
+  }
+}
+
+async function tick(){
+  // CATATAN: syarat lama "video.readyState === HAVE_ENOUGH_DATA" (4) tidak pernah
+  // terpenuhi di sebagian WebView Android walau video jalan normal - dulu itu bikin
+  // loop ini tidak pernah eksekusi sama sekali. Sekarang cukup cek videoWidth.
+  if (scanning && !busy && video.videoWidth > 0){
+    busy = true;
+    const vw = video.videoWidth, vh = video.videoHeight;
+    scanAttempts++;
+
+    try{
+      if (detector){
+        // Native: baca elemen video langsung, tanpa canvas.
+        const codes = await detector.detect(video);
+        if (codes && codes.length && codes[0].rawValue){
+          onCodeDetected(codes[0].rawValue);
+        }
+      } else {
+        // Cadangan jsQR. Resolusi analisis dikecilkan ke 500px: jsQR itu berat,
+        // di 900px cuma dapat ~1 percobaan/detik sehingga hampir semua frame yang
+        // kebetulan tertangkap itu blur karena tangan goyang. Di 500px jauh lebih
+        // banyak percobaan per detik = jauh lebih besar peluang dapat frame tajam.
+        const r = cropRect(vw, vh);
+        const size = r.sSide > 500 ? 500 : Math.round(r.sSide);
+        if (canvas.width !== size) canvas.width = size;
+        if (canvas.height !== size) canvas.height = size;
+        // Smoothing DIAKTIFKAN: waktu mengecilkan gambar, rata-rata antar piksel
+        // justru bikin modul QR lebih bersih. (Nearest-neighbor malah bisa
+        // menghilangkan baris modul - itu kesalahan setting saya sebelumnya.)
+        ctx.imageSmoothingEnabled = true;
+        ctx.drawImage(video, r.sx, r.sy, r.sSide, r.sSide, 0, 0, size, size);
+        const imgData = ctx.getImageData(0, 0, size, size);
+        // 'dontInvert' saja: 2x lebih cepat dari 'attemptBoth', dan QR normal
+        // (hitam di atas putih) tidak butuh percobaan inversi.
+        const code = jsQR(imgData.data, imgData.width, imgData.height, { inversionAttempts: 'dontInvert' });
+        if (code && code.data){
+          onCodeDetected(code.data);
+        }
+      }
+    }catch(e){
+      if (detector){
+        detectorFails++;
+        if (detectorFails >= 3){
+          detector = null; // native bermasalah -> turun ke jsQR permanen
+          engineName = 'jsQR (canvas, fallback)';
+        }
+      }
+    }
+
+    const now = performance.now();
+    if (now - scanAttemptsWindowStart >= 1000){
+      updateDiagnostics(vw, vh);
+      if (debugInfo){
+        debugInfo.textContent = engineName + ' · ' + scanAttempts + 'x/dtk · ' + vw + '×' + vh + ' · ' + lastDiag;
+      }
+      scanAttempts = 0;
+      scanAttemptsWindowStart = now;
+    }
+
+    busy = false;
+  }
+  requestAnimationFrame(tick);
+}
+
+function onCodeDetected(text){
+  scanning = false;
+  currentKode = text;
+  kodeBox.textContent = text;
+  btnSend.disabled = false;
+  scanMsg.textContent = '✅ Kode terbaca';
+  beep();
+  requestLookup(text);   // langsung tanya ke PC: part ini ada di List-PH?
+}
+
+// ============ BANTUAN VISUAL: CARI GAMBAR BENTUK KONEKTOR ============
+// Bukan pencarian gambar yang ditanam di dalam halaman (itu perlu API
+// berbayar/berkunci seperti Google Custom Search atau Bing Image Search API,
+// dan tetap harus lewat server karena browser tidak diizinkan fetch() lintas
+// situs ke Google/Bing). Sebagai gantinya: buka HASIL PENCARIAN GAMBAR ASLI
+// (Google/Bing Images) di tab baru, dengan query yang disusun otomatis dari
+// data yang sudah ada - operator tinggal ketuk, langsung lihat foto katalog
+// aslinya untuk mencocokkan bentuk fisik konektor yang dipegang.
+//
+// Google/Bing: query diprioritaskan pakai MAKER + kode HASIL SCAN (Part
+// Number E/C) karena itu part yang barusan dipegang/discan operator.
+// DigiKey beda (lihat kodeDigikey di bawah): situs itu berbasis nomor part
+// produsen (Connector Harness), jadi diutamakan Connector Harness kalau ada.
+// "connector" (Inggris) ditambahkan karena katalog produsen (JST, Molex, TE,
+// dst) umumnya berbahasa Inggris.
+function nilaiGambar(inputEl, fieldMaster){
+  const manual = inputEl.value.trim();
+  if (manual) return manual;
+  return (masterItemSekarang && masterItemSekarang[fieldMaster])
+    ? String(masterItemSekarang[fieldMaster]).trim() : '';
+}
+
+function perbaruiPencarianGambar(){
+  const maker = nilaiGambar(inputMaker, 'maker');
+  const partHarness = nilaiGambar(inputPartHarness, 'partHarness');
+  const klasifikasi = nilaiGambar(inputKlasifikasi, 'klasifikasi');
+
+  // Google/Bing (dan yang ditampilkan di kotak info) MENGUTAMAKAN kode HASIL
+  // SCAN (Part Number E/C) - itu yang barusan discan operator, jadi itu yang
+  // wajar dicari gambarnya duluan. DULU variabel ini ("kodeUtama") dipakai
+  // bareng untuk Google/Bing MAUPUN DigiKey dengan urutan kebalik (Connector
+  // Harness duluan) - membuat pencarian Google/Bing menampilkan part number
+  // yang BUKAN hasil scan, melainkan pasangannya (Connector Harness).
+  const kodeUtama = currentKode || partHarness || '';
+
+  if (!maker && !kodeUtama){
+    gambarBox.style.display = 'none';
+    return;
+  }
+
+  const bagian = [maker, kodeUtama, !currentKode ? klasifikasi : '', 'connector']
+    .map(s => (s || '').trim()).filter(Boolean);
+  const query = bagian.join(' ');
+
+  // DigiKey BEDA SENGAJA: situs distributor komponen elektronik ini
+  // pencariannya berbasis NOMOR PART PRODUSEN (mis. seri JST "EHR-8"), bukan
+  // kata kunci bebas - sementara Part Number E/C hasil scan biasanya nomor
+  // INTERNAL yang tidak akan ketemu apa pun di DigiKey. Karena itu, KHUSUS
+  // untuk DigiKey, Connector Harness tetap diutamakan (kalau ada) di atas
+  // kode hasil scan - beda dari Google/Bing di atas.
+  const kodeDigikey = partHarness || currentKode || '';
+  const queryDigikey = kodeDigikey || [maker, klasifikasi].filter(Boolean).join(' ') || query;
+
+  gambarMaker.textContent = maker || '(maker belum diketahui)';
+  gambarKode.textContent = kodeUtama || '';
+  linkGambarGoogle.href = 'https://www.google.com/search?tbm=isch&q=' + encodeURIComponent(query);
+  linkGambarBing.href = 'https://www.bing.com/images/search?q=' + encodeURIComponent(query);
+  linkGambarDigikey.href = 'https://www.digikey.com/en/products/result?keywords=' + encodeURIComponent(queryDigikey);
+  gambarBox.style.display = 'block';
+}
+
+// Query ikut diperbarui langsung kalau operator mengisi/mengedit field manual -
+// berguna terutama untuk part BARU (belum ada di List-PH) yang makernya belum
+// diketahui sistem, operator bisa coba-coba isi lalu langsung cek gambarnya.
+[inputMaker, inputPartHarness, inputKlasifikasi].forEach(el => {
+  el.addEventListener('input', perbaruiPencarianGambar);
+});
+
+function resetHasil(){
+  masterRow = null;
+  masterQty = 0;
+  masterPartEc = '';
+  masterItemSekarang = null;
+  masterBox.style.display = 'none';
+  pilihBaris.style.display = 'none';
+  pilihList.innerHTML = '';
+  lookupStatus.textContent = '';
+  lookupStatus.className = 'lookup-status';
+  updatePreview();
+  perbaruiPencarianGambar();   // tampilkan/sembunyikan sesuai currentKode saat ini
+}
+
+btnRescan.addEventListener('click', () => {
+  scanning = true;
+  currentKode = null;
+  kodeBox.textContent = '—';
+  btnSend.disabled = true;
+  scanMsg.textContent = 'Arahkan kamera ke QR code';
+  // Kosongkan juga field manual - kalau tidak, sisa isian part SEBELUMNYA bisa
+  // ketinggalan dan bikin bingung (termasuk query pencarian gambar jadi salah).
+  ['partHarness','klasifikasi','maker','keterangan','lokasi'].forEach(id => {
+    document.getElementById(id).value = '';
+  });
+  resetHasil();
+});
+
+btnManual.addEventListener('click', () => {
+  const v = manualKode.value.trim();
+  if (!v){ showPopup('Ketik atau tempel kode QR-nya dulu di kotak Input Manual.', 'warn', {autoClose: 2500}); return; }
+  onCodeDetected(v);
+});
+
+// ================= LOOKUP DUA ARAH (HP <-> PC lewat broker) =================
+// Alur: scan -> publish ke .../lookup/req -> PC cari di sheet List-PH ->
+//       PC balas ke .../lookup/res -> form terisi otomatis.
+let masterRow = null;      // baris di List-PH yang mau di-update (null = tidak ada di master)
+let masterQty = 0;         // QTY tercatat sekarang di baris itu
+let masterPartEc = '';     // nilai part number di baris itu (pengaman waktu simpan)
+let masterItemSekarang = null;   // item List-PH yang lagi ditampilkan (buat query pencarian gambar)
+let lookupReqId = null;
+let lookupTimer = null;
+
+async function requestLookup(kode){
+  resetHasil();
+  lookupReqId = 'r' + Date.now() + Math.random().toString(16).slice(2, 6);
+  lookupStatus.textContent = 'Mencari di List-PH...';
+  lookupStatus.className = 'lookup-status cari';
+
+  // ---- Jalur LOKAL: langsung ke PC, tidak lewat internet sama sekali ----
+  if (transport === 'lokal'){
+    try{
+      const r = await fetchDenganBatasWaktu(apiBase + '/api/lookup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ kode })
+      });
+      const data = await r.json();
+      data.reqId = lookupReqId;
+      onLookupResult(data);
+    }catch(e){
+      lookupStatus.textContent = 'Gagal menghubungi PC: ' + e.message;
+      lookupStatus.className = 'lookup-status kosong';
+      showPopup('Gagal menghubungi PC: ' + e.message
+               + '\n\nPastikan HP & PC di jaringan yang sama dan server.py sedang jalan.', 'err');
+    }
+    return;
+  }
+
+  // ---- Jalur BROKER ----
+  if (!mqttClient || !mqttClient.connected){
+    lookupStatus.textContent = 'Tidak bisa cari: belum terhubung ke broker.';
+    lookupStatus.className = 'lookup-status kosong';
+    showPopup('Belum tersambung ke broker MQTT, jadi part ini belum bisa dicari.'
+             + '\n\nTunggu status di atas jadi hijau, lalu scan ulang.', 'warn');
+    return;
+  }
+  mqttClient.publish(T_LOOKUP_REQ, JSON.stringify({ reqId: lookupReqId, kode }), { qos: 1 });
+
+  clearTimeout(lookupTimer);
+  lookupTimer = setTimeout(() => {
+    if (lookupStatus.classList.contains('cari')){
+      lookupStatus.textContent = 'Tidak ada jawaban dari PC. Pastikan mqtt_subscriber.py jalan.';
+      lookupStatus.className = 'lookup-status kosong';
+      showPopup('Tidak ada jawaban dari PC dalam 8 detik.'
+               + '\n\nPastikan mqtt_subscriber.py sedang jalan di PC.', 'warn');
+    }
+  }, 8000);
+}
+
+function tampilkanItem(it){
+  masterRow = it.row;
+  masterQty = Number(it.qty) || 0;
+  masterPartEc = it.partEc || '';     // dikirim balik saat simpan sbg pengaman baris
+  masterItemSekarang = it;            // dipakai perbaruiPencarianGambar() untuk susun query
+  mPartEc.textContent = it.partEc || '—';
+  mKlasifikasi.textContent = it.klasifikasi || '—';
+  mHarness.textContent = it.partHarness || '—';
+  mMaker.textContent = it.maker || '—';
+  mLokasi.textContent = it.lokasi || '—';
+  mQty.textContent = (it.qty === '' || it.qty === null) ? '—' : it.qty;
+  mRow.textContent = it.row;
+  masterBox.style.display = 'block';
+  updatePreview();
+  perbaruiPencarianGambar();   // maker sudah diketahui -> perbarui query gambarnya
+}
+
+function onLookupResult(res){
+  if (res.reqId !== lookupReqId) return;   // jawaban untuk permintaan lama, abaikan
+  clearTimeout(lookupTimer);
+
+  if (!res.ok){
+    lookupStatus.textContent = 'Gagal mencari: ' + (res.error || 'tidak diketahui');
+    lookupStatus.className = 'lookup-status kosong';
+    showPopup('Gagal mencari data: ' + (res.error || 'tidak diketahui'), 'err');
+    return;
+  }
+
+  if (res.found === 0){
+    lookupStatus.textContent = '✖ Tidak ada di List-PH — akan dicatat sebagai data baru di DataScan.';
+    lookupStatus.className = 'lookup-status kosong';
+    manualFields.open = true;   // buka field manual biar bisa dilengkapi
+    return;
+  }
+
+  if (res.found === 1){
+    const it = res.items[0];
+    // Kalau bukan cocok persis, operator WAJIB tahu - jangan sampai dia mengira
+    // ini kode yang sama persis padahal cuma cocok sebagian.
+    if (res.match === 'persis'){
+      lookupStatus.textContent = '✔ Ketemu di List-PH baris ' + it.row;
+      lookupStatus.className = 'lookup-status ada';
+    } else if (res.match === 'sebagian'){
+      // Cocok setelah bagian sebelum/sesudah '/' diabaikan - ini perilaku normal
+      // yang diharapkan, jadi dihitung sukses, tapi nilai aslinya tetap ditampilkan.
+      lookupStatus.textContent = `✔ Ketemu di baris ${it.row} — "${it.partEc}"`;
+      lookupStatus.className = 'lookup-status ada';
+    } else {
+      lookupStatus.textContent = `⚠ Cocok ${res.match} (tidak persis) di baris ${it.row}: `
+                               + `"${res.kode}" → "${it.partEc}". Pastikan benar sebelum kirim.`;
+      lookupStatus.className = 'lookup-status cari';
+      // Ini risiko salah data yang paling gampang lolos: kalau operator tidak
+      // sadar ini cuma MIRIP (bukan sama persis) dan lanjut kirim, QTY baris
+      // yang salah yang ke-update. HARUS diketuk manual, tidak boleh auto-hilang.
+      showPopup(`Kode yang di-scan ("${res.kode}") TIDAK SAMA PERSIS dengan yang tercatat `
+               + `di List-PH baris ${it.row} ("${it.partEc}") - cuma mirip.`
+               + `\n\nPeriksa dulu sebelum menekan "Kirim ke Excel", supaya tidak salah update baris.`,
+               'warn', {judul: 'Cocok tidak persis'});
+    }
+    tampilkanItem(it);
+    return;
+  }
+
+  // Lebih dari satu baris cocok -> operator yang pilih, JANGAN ditebak otomatis
+  // supaya stok baris lain tidak ke-update secara keliru.
+  lookupStatus.textContent = '⚠ Ketemu ' + res.found + ' baris dengan part number sama — pilih salah satu.';
+  lookupStatus.className = 'lookup-status cari';
+  showPopup(`Ditemukan ${res.found} baris di List-PH dengan part number yang sama.`
+           + `\n\nPilih salah satu di daftar bawah kotak part number sebelum mengisi qty.`,
+           'warn', {judul: 'Ada baris kembar', autoClose: 4000});
+  pilihList.innerHTML = '';
+  res.items.forEach(it => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = `baris ${it.row} · rak ${it.lokasi || '-'} · qty ${it.qty} · ${it.klasifikasi || '-'}`;
+    b.addEventListener('click', () => {
+      [...pilihList.children].forEach(x => x.classList.remove('dipilih'));
+      b.classList.add('dipilih');
+      tampilkanItem(it);
+      lookupStatus.textContent = '✔ Dipilih baris ' + it.row;
+      lookupStatus.className = 'lookup-status ada';
+    });
+    pilihList.appendChild(b);
+  });
+  pilihBaris.style.display = 'block';
+}
+
+// ---------- Mode qty (ganti / tambah / kurang) + pratinjau hasil ----------
+let qtyMode = 'set';
+document.querySelectorAll('.mode').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.mode').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    qtyMode = btn.dataset.mode;
+    updatePreview();
+  });
+});
+
+function updatePreview(){
+  const q = Number(document.getElementById('qty').value) || 0;
+  if (masterRow === null){
+    qtyPreview.textContent = q + ' (baru)';
+    return;
+  }
+  let hasil = q;
+  if (qtyMode === 'add') hasil = masterQty + q;
+  else if (qtyMode === 'sub') hasil = masterQty - q;
+  qtyPreview.textContent = masterQty + ' → ' + hasil;
+}
+document.getElementById('qty').addEventListener('input', updatePreview);
+
+// ---------- Kirim ke broker MQTT ----------
+let saveReqId = null;
+
+btnSend.addEventListener('click', async () => {
+  if (!currentKode) return;
+
+  if (transport === 'mqtt' && (!mqttClient || !mqttClient.connected)){
+    showPopup('Belum terhubung ke broker MQTT. Tunggu status di atas jadi hijau, lalu coba lagi.', 'warn');
+    return;
+  }
+
+  const qty = document.getElementById('qty').value;
+  saveReqId = 's' + Date.now() + Math.random().toString(16).slice(2, 6);
+
+  const payload = JSON.stringify({
+    reqId: saveReqId,
+    kode: currentKode,                 // -> kolom PART NUMBER UNTUK E/C
+    row: masterRow,                    // baris List-PH yang mau di-update (null = belum ada)
+    expectPartEc: masterPartEc,        // nilai yg tampil saat lookup, dicek ulang sebelum menulis
+    mode: qtyMode,                     // set / add / sub
+    qty,
+    lokasi: document.getElementById('lokasi').value.trim(),
+    partHarness: document.getElementById('partHarness').value.trim(),
+    klasifikasi: document.getElementById('klasifikasi').value.trim(),
+    maker: document.getElementById('maker').value.trim(),
+    keterangan: document.getElementById('keterangan').value.trim(),
+    perangkat: (inputPerangkat.value.trim() || namaPerangkat),   // pengirimnya siapa
+  });
+
+  btnSend.disabled = true;
+  btnSend.textContent = 'Mengirim...';
+
+  // ---- Jalur LOKAL: kirim & langsung dapat jawabannya di respons yang sama ----
+  if (transport === 'lokal'){
+    try{
+      const r = await fetchDenganBatasWaktu(apiBase + '/api/scan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: payload
+      });
+      const data = await r.json();
+      data.reqId = saveReqId;
+      onSaveResult(data);
+    }catch(e){
+      showPopup('Gagal menghubungi PC: ' + e.message
+               + '\n\nData BELUM tersimpan. Pastikan HP & PC di jaringan yang sama.',
+               'err', {judul: 'Gagal Kirim ke Excel'});
+      addLog(currentKode, qty, false);
+      btnSend.textContent = 'Kirim ke Excel';
+      btnSend.disabled = false;
+    }
+    return;
+  }
+
+  // ---- Jalur BROKER ----
+  mqttClient.publish(MQTT_TOPIC, payload, { qos: 1 }, (err) => {
+    if (err){
+      showPopup('Gagal kirim ke broker: ' + err.message + '\n\nData BELUM tersimpan.',
+               'err', {judul: 'Gagal Kirim ke Excel'});
+      addLog(currentKode, qty, false);
+      btnSend.textContent = 'Kirim ke Excel';
+      btnSend.disabled = false;
+    } else {
+      btnSend.textContent = 'Menunggu konfirmasi...';
+      // Konfirmasi asli datang lewat topic .../save/res (lihat onSaveResult).
+      setTimeout(() => {
+        if (btnSend.textContent === 'Menunggu konfirmasi...'){
+          showPopup('Data terkirim ke broker, tapi PC belum membalas dalam 8 detik.'
+                   + '\n\nBelum tentu tersimpan - cek apakah mqtt_subscriber.py sedang jalan di PC.',
+                   'warn', {judul: 'Belum Ada Konfirmasi'});
+          btnSend.textContent = 'Kirim ke Excel';
+          btnSend.disabled = false;
+        }
+      }, 8000);
+    }
+  });
+});
+
+function onSaveResult(res){
+  if (res.reqId !== saveReqId) return;
+  const qty = document.getElementById('qty').value;
+
+  if (!res.ok){
+    showPopup('Data GAGAL disimpan ke Excel.\n\nSebab: ' + (res.error || 'tidak diketahui'),
+              'err', {judul: 'Gagal Kirim ke Excel'});
+    addLog(currentKode, qty, false);
+    btnSend.textContent = 'Kirim ke Excel';
+    btnSend.disabled = false;
+    return;
+  }
+
+  const pesanSukses = res.newRow
+    ? `Part baru ditambahkan ke List-PH baris ${res.row} (qty ${res.qtyBaru})`
+    : res.updatedMaster
+      ? `List-PH baris ${res.row}: qty ${res.qtyLama} → ${res.qtyBaru}`
+      : `Dicatat sebagai data baru di DataScan baris ${res.logRow}`;
+  addLog(currentKode, res.qtyBaru, true);
+
+  // PENTING: layar (kodeBox, info List-PH, dst) SENGAJA dibiarkan seperti apa
+  // adanya, dan kamera TIDAK diaktifkan lagi (`scanning` tetap false), sampai
+  // operator sendiri menekan "Scan Lagi" di popup ini. Kalau direset segera
+  // (seperti sebelumnya), kamera bisa keburu menangkap QR berikutnya SELAGI
+  // popup konfirmasi ini masih menutupi layar - operator jadi tidak sempat
+  // benar-benar membaca konfirmasi berhasilnya sebelum data yang ditampilkan
+  // sudah berganti ke scan berikutnya.
+  showPopup(pesanSukses, 'ok', {
+    judul: 'Berhasil Kirim ke Excel',
+    tombol: 'Scan Lagi ▶',
+    autoClose: 0,
+    wajibTombol: true,
+    onTutup: () => {
+      currentKode = null;
+      kodeBox.textContent = '—';
+      manualKode.value = '';
+      ['partHarness','klasifikasi','maker','keterangan','lokasi'].forEach(id => {
+        document.getElementById(id).value = '';
+      });
+      resetHasil();
+      scanning = true;
+      scanMsg.textContent = 'Arahkan kamera ke QR code';
+      btnSend.textContent = 'Kirim ke Excel';
+      btnSend.disabled = true;
+    },
+  });
+}
+
+function addLog(kode, qty, ok){
+  historyCount++;
+  if (historyCount === 1) logEl.innerHTML = '';
+  const div = document.createElement('div');
+  div.className = 'log-item';
+  const time = new Date().toLocaleTimeString('id-ID');
+  div.innerHTML = `<span><b>${kode}</b> · qty ${qty} · ${time}</span><span class="badge ${ok?'ok':'err'}">${ok?'OK':'GAGAL'}</span>`;
+  logEl.prepend(div);
+}
+
+// ---------- Koneksi ke broker MQTT ----------
+let mqttClient = null;
+let mqttEverConnected = false;
+
+function connectMqtt(){
+  // Kalau mqtt.lib.js gagal termuat (404 / diblokir), 'mqtt' global tidak ada.
+  // Tanpa cek ini, mqtt.connect() di bawah akan lempar error dan status
+  // "Menghubungkan..." nyangkut selamanya tanpa pesan apa pun.
+  if (typeof mqtt === 'undefined'){
+    setDotState('off');
+    statusText.textContent = '⚠️ Gagal load library MQTT (lokal & CDN)';
+    camHint.textContent = 'Coba refresh halaman, atau cek koneksi internet HP.';
+    showPopup('Gagal memuat library MQTT, baik dari file lokal maupun dari internet (CDN).'
+             + '\n\nCoba refresh halaman, atau cek koneksi internet HP.', 'err');
+    return;
+  }
+
+  setDotState('checking');
+  statusText.textContent = 'Menghubungkan ke broker MQTT...';
+
+  try{
+    mqttClient = mqtt.connect(MQTT_BROKER_URL, {
+      clientId: 'hp-scan-' + Math.random().toString(16).slice(2, 10),
+      reconnectPeriod: 3000,
+      connectTimeout: 8000,
+      clean: true,
+    });
+  }catch(err){
+    statusText.textContent = '⚠️ Gagal inisialisasi MQTT: ' + err.message;
+    showPopup('Gagal menyiapkan koneksi MQTT: ' + err.message, 'err');
+    return;
+  }
+
+  mqttClient.on('connect', () => {
+    mqttEverConnected = true;
+    setDotState('broker');
+    statusText.textContent = 'Terhubung ke broker MQTT';
+    // Dengarkan balasan dari PC (hasil pencarian & konfirmasi simpan)
+    mqttClient.subscribe([T_LOOKUP_RES, T_SAVE_RES], { qos: 1 });
+  });
+
+  mqttClient.on('message', (topic, message) => {
+    let data;
+    try{ data = JSON.parse(message.toString()); }
+    catch(e){ return; }
+    if (topic === T_LOOKUP_RES) onLookupResult(data);
+    else if (topic === T_SAVE_RES) onSaveResult(data);
+  });
+  mqttClient.on('reconnect', () => {
+    setDotState('checking');
+    statusText.textContent = 'Menyambung ulang ke broker...';
+  });
+  mqttClient.on('close', () => {
+    setDotState('off');
+    statusText.textContent = 'Terputus dari broker';
+  });
+  mqttClient.on('error', (err) => {
+    setDotState('off');
+    statusText.textContent = 'Error MQTT: ' + (err && err.message ? err.message : err);
+  });
+
+  // Watchdog: kalau setelah 10 detik belum pernah konek sama sekali, kemungkinan
+  // besar jaringan (WiFi/data seluler) memblokir port 8084 - kasih tau usernya,
+  // karena mqtt.js sendiri bisa diam saja (retry terus) tanpa event error.
+  setTimeout(() => {
+    if (!mqttEverConnected){
+      const pesan = 'Belum tersambung ke broker setelah 10 detik. Kemungkinan jaringan (WiFi/data seluler) '
+                  + 'memblokir port 8084.\n\nCoba ganti jaringan (mis. WiFi ↔ data seluler), atau tes dulu di '
+                  + 'http://mqtt-client.emqx.com/ dari HP yang sama.';
+      camHint.textContent = camHint.textContent || '⚠️ ' + pesan;
+      showPopup(pesan, 'warn', {judul: 'Belum tersambung ke broker'});
+    }
+  }, 10000);
+}
+
+// ============ PEMILIHAN JALUR: LOKAL vs BROKER ============
+// LOKAL  : HP -> langsung ke PC lewat WiFi/hotspot yang sama. TIDAK butuh internet,
+//          jawabannya instan. Ini yang dipakai kalau HP nyambung hotspot laptop.
+// BROKER : HP -> internet -> broker -> PC. Dipakai kalau HP & PC beda jaringan.
+// Dipilih otomatis: kalau halaman ini dilayani oleh server.py (jadi /api/health
+// bisa dijawab), berarti PC terjangkau langsung -> pakai LOKAL.
+let transport = 'mqtt';
+let apiBase = '';            // '' = origin yang sama; atau 'http://192.168.137.1:5001'
+const PORT_HTTP_PC = 5001;   // port API http polos di server.py
+
+function setTransport(mode, alasan){
+  transport = mode;
+  if (mode === 'lokal'){
+    setDotState('local');
+    statusText.textContent = 'Jalur LOKAL — langsung ke PC'
+                           + (apiBase ? ' (' + apiBase.replace('http://','') + ')' : '');
+    btnJalur.textContent = 'Pindah ke broker';
+    barisAlamat.style.display = 'none';
+  } else {
+    setDotState('checking');   // belum tentu konek - baru "mencoba" broker, dijadikan biru berdenyut kalau connectMqtt() sukses
+    statusText.textContent = 'Jalur BROKER — ' + (alasan || 'lewat internet');
+    btnJalur.textContent = 'Coba jalur lokal';
+    barisAlamat.style.display = 'flex';
+    loadMqttLib();
+  }
+}
+
+// Pembungkus fetch dengan batas waktu (AbortController) - supaya kalau PC/Excel
+// macet (mis. ada sel dalam mode edit di Excel), permintaan GAGAL JELAS dalam
+// waktu wajar, bukan bikin tulisan status ('Mencari di List-PH...', 'Mengirim...')
+// menggantung tanpa akhir kalau backend-nya sendiri tidak pernah sempat kembali.
+async function fetchDenganBatasWaktu(url, opt, ms){
+  ms = ms || 15000;
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), ms);
+  try{
+    return await fetch(url, Object.assign({}, opt, { signal: ctrl.signal }));
+  }catch(e){
+    if (e.name === 'AbortError'){
+      throw new Error('PC tidak merespons dalam ' + Math.round(ms / 1000) + ' detik '
+        + '(kemungkinan Excel macet - ada sel dalam mode edit). Coba lagi.');
+    }
+    throw e;
+  }finally{
+    clearTimeout(t);
+  }
+}
+
+async function cobaHealth(base){
+  try{
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 2500);
+    const r = await fetch(base + '/api/health', { cache: 'no-store', signal: ctrl.signal });
+    clearTimeout(t);
+    return r.ok;
+  }catch(e){ return false; }
+}
+
+async function deteksiJalur(){
+  setDotState('checking');
+  statusText.textContent = 'Mengecek koneksi ke PC...';
+
+  // 1) Halaman ini dilayani server.py sendiri? (dibuka lewat https://<IP-PC>:5000)
+  if (await cobaHealth('')){ apiBase = ''; setTransport('lokal'); return; }
+
+  // 2) Halaman dibuka dari HP sendiri (localhost). Tidak ada API di origin ini,
+  //    jadi tembak langsung ke PC lewat http polos - tanpa TLS, tanpa sertifikat.
+  //    Boleh http karena halaman localhost juga http, jadi bukan mixed content.
+  const simpan = (localStorage.getItem('alamatPC') || '').trim();
+  if (simpan){
+    const base = 'http://' + simpan + ':' + PORT_HTTP_PC;
+    if (await cobaHealth(base)){ apiBase = base; setTransport('lokal'); return; }
+  }
+
+  apiBase = '';
+  setTransport('mqtt', simpan ? 'PC tidak menjawab' : 'alamat PC belum diisi');
+}
+
+// ---------- Nama perangkat pengirim (OTOMATIS) ----------
+// BATASAN NYATA: browser TIDAK diizinkan membaca nama asli HP (mis. "Redmi milik
+// Budi"). Tidak ada API-nya - dikunci demi privasi. Jadi identitas disusun dari
+// yang memang bisa dibaca otomatis:
+//   1. MODEL HP   - lewat User-Agent Client Hints (paling akurat di Chrome
+//                   Android), mundur ke penguraian User-Agent biasa.
+//   2. KODE UNIK  - dibuat sekali lalu disimpan di HP itu, supaya dua HP dengan
+//                   model sama tetap bisa dibedakan.
+//   3. ALAMAT IP  - ditambahkan sendiri oleh PC saat data masuk (lihat server.py).
+// Hasilnya mis. "2201116SG #A3F9". Operator tidak perlu mengetik apa pun,
+// tapi tetap boleh menggantinya jadi nama yang lebih enak dibaca.
+function modelDariUA(){
+  const ua = navigator.userAgent || '';
+  const m = ua.match(/Android[^;]*;\s*([^;)]+)[;)]/i);
+  if (m && m[1]){
+    // Sebagian HP (mis. Samsung) menulis "SM-A525F Build/SP1A" - buang bagian
+    // "Build/..." nya, ambil model saja.
+    const v = m[1].split(/\s+Build/i)[0].trim();
+    if (v && !/^wv$/i.test(v)) return v.slice(0, 30);
+  }
+  if (/iPhone/i.test(ua)) return 'iPhone';
+  if (/iPad/i.test(ua)) return 'iPad';
+  if (/Windows/i.test(ua)) return 'PC-Windows';
+  return 'Perangkat';
+}
+
+function kodeUnikPerangkat(){
+  let id = '';
+  try{ id = localStorage.getItem('idPerangkat') || ''; }catch(e){}
+  if (!id){
+    id = Math.random().toString(36).slice(2, 6).toUpperCase();
+    try{ localStorage.setItem('idPerangkat', id); }catch(e){}
+  }
+  return id;
+}
+
+async function deteksiPerangkat(){
+  let model = '';
+  // Cara resmi & paling akurat di Chromium: User-Agent Client Hints.
+  try{
+    if (navigator.userAgentData && navigator.userAgentData.getHighEntropyValues){
+      const d = await navigator.userAgentData.getHighEntropyValues(['model']);
+      if (d && d.model) model = String(d.model).trim();
+    }
+  }catch(e){}
+  if (!model) model = modelDariUA();
+  return model + ' #' + kodeUnikPerangkat();
+}
+
+const inputPerangkat = document.getElementById('perangkat');
+let namaPerangkat = '';
+
+(async () => {
+  let simpan = '';
+  try{ simpan = localStorage.getItem('namaPerangkat') || ''; }catch(e){}
+  namaPerangkat = simpan || await deteksiPerangkat();   // otomatis, tanpa diketik
+  inputPerangkat.value = namaPerangkat;
+})();
+
+inputPerangkat.addEventListener('change', async () => {
+  const v = inputPerangkat.value.trim();
+  namaPerangkat = v || await deteksiPerangkat();        // dikosongkan = balik ke otomatis
+  inputPerangkat.value = namaPerangkat;
+  try{
+    if (v) localStorage.setItem('namaPerangkat', namaPerangkat);
+    else localStorage.removeItem('namaPerangkat');
+  }catch(e){}
+});
+
+// Kolom "Alamat PC": isi IP PC-nya, disimpan di HP supaya tidak perlu diketik lagi.
+inputAlamat.value = localStorage.getItem('alamatPC') || '';
+btnAlamat.addEventListener('click', async () => {
+  const v = inputAlamat.value.trim().replace(/^https?:\/\//, '').replace(/[:/].*$/, '');
+  if (!v){ showPopup('Isi alamat IP PC dulu, misalnya 192.168.137.1', 'warn', {autoClose: 2500}); return; }
+  try{ localStorage.setItem('alamatPC', v); }catch(e){}
+  btnAlamat.textContent = 'Mencoba...';
+  const base = 'http://' + v + ':' + PORT_HTTP_PC;
+  if (await cobaHealth(base)){
+    apiBase = base;
+    setTransport('lokal');
+    showPopup('Tersambung langsung ke PC ' + v, 'ok');
+  } else {
+    showPopup('PC ' + v + ' tidak menjawab di port ' + PORT_HTTP_PC
+             + '.\n\nPastikan server.py sedang jalan di PC & firewall mengizinkan.', 'err');
+  }
+  btnAlamat.textContent = 'Sambung';
+});
+
+btnJalur.addEventListener('click', () => {
+  if (transport === 'lokal') setTransport('mqtt', 'dipilih manual');
+  else deteksiJalur();
+});
+
+function loadMqttLib(){
+  if (typeof mqtt !== 'undefined'){ connectMqtt(); return; }
+  loadScript('mqtt.lib.js', connectMqtt, () => {
+    console.warn('mqtt.lib.js lokal gagal dimuat, coba dari CDN...');
+    statusText.textContent = 'File MQTT lokal gagal, coba lewat CDN...';
+    loadScript('https://cdn.jsdelivr.net/npm/mqtt@5.15.2/dist/mqtt.min.js', connectMqtt, () => {
+      setDotState('off');
+      statusText.textContent = '⚠️ Gagal load library MQTT (lokal & CDN)';
+      camHint.textContent = 'Cek koneksi internet HP, atau refresh halaman.';
+      showPopup('Gagal memuat library MQTT setelah dicoba dari file lokal maupun dari internet (CDN).'
+               + '\n\nCek koneksi internet HP, atau refresh halaman.', 'err');
+    });
+  });
+}
+
+deteksiJalur();
+startCamera();
+</script>
+</body>
+</html>

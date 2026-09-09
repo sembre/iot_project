@@ -1,0 +1,915 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Buat Label QR Manual (A4)</title>
+<style>
+  :root{
+    --bg:#0f172a; --card:#1e293b; --accent:#22c55e; --text:#f1f5f9; --muted:#94a3b8; --line:#334155;
+    --err:#ef4444; --warn:#f59e0b; --danger:#ef4444;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;padding:18px;max-width:760px;margin:0 auto}
+  h1{font-size:20px;margin:0 0 4px}
+  p.sub{color:var(--muted);font-size:13px;margin:0 0 16px;line-height:1.5}
+  .nav-dashboard{display:flex;align-items:center;justify-content:center;gap:7px;
+                 width:fit-content;margin:0 auto 14px;padding:8px 18px;
+                 font-size:12.5px;font-weight:600;color:var(--text);text-decoration:none;
+                 background:linear-gradient(145deg,var(--card),#16233a);
+                 border:1px solid var(--line);border-radius:999px;
+                 box-shadow:0 2px 10px rgba(0,0,0,.3);
+                 transition:transform .15s ease,border-color .15s ease,box-shadow .15s ease,background .15s ease}
+  .nav-dashboard .ico{font-size:14px;transition:transform .15s ease}
+  .nav-dashboard:active{transform:scale(.95)}
+  @media (hover:hover){
+    .nav-dashboard:hover{border-color:var(--accent);background:linear-gradient(145deg,#243349,#16233a);
+                          box-shadow:0 4px 16px rgba(34,197,94,.3)}
+    .nav-dashboard:hover .ico{transform:translateX(-3px)}
+  }
+
+  .status-koneksi{display:flex;align-items:center;justify-content:center;gap:6px;font-size:12px;color:var(--muted);
+          margin-bottom:12px;flex-wrap:wrap}
+  .dot{width:9px;height:9px;border-radius:50%;flex-shrink:0;background:var(--danger);transition:background .25s ease}
+  .dot.checking{background:#94a3b8;animation:dotChecking 1.2s ease-in-out infinite}
+  .dot.local{background:var(--accent);box-shadow:0 0 0 3px rgba(34,197,94,.2)}
+  .dot.broker{background:#38bdf8;animation:dotBroker 2s ease-in-out infinite}
+  .dot.off{background:var(--danger);animation:dotOff 1s ease-in-out infinite}
+  @keyframes dotChecking{0%,100%{opacity:1}50%{opacity:.3}}
+  @keyframes dotBroker{0%,100%{box-shadow:0 0 0 0 rgba(56,189,248,.5)}50%{box-shadow:0 0 0 5px rgba(56,189,248,0)}}
+  @keyframes dotOff{0%,100%{opacity:1}50%{opacity:.25}}
+  #btnJalur{width:auto;margin:0;padding:4px 10px;font-size:11px;font-weight:400;
+            background:#0b1220;color:var(--muted);border:1px solid var(--line);border-radius:8px}
+  #barisAlamat{display:flex;gap:8px;margin-bottom:14px}
+  #barisAlamat input{flex:1;font-size:14px;padding:10px}
+  #btnAlamat{width:auto;margin:0;padding:10px 16px;font-size:14px;background:#334155;color:var(--text)}
+
+  .card{background:var(--card);border-radius:14px;padding:16px;margin-bottom:16px;border:1px solid var(--line)}
+  label{display:block;font-size:13px;color:var(--muted);margin:10px 0 4px}
+  input[type=text], input[type=number]{
+    width:100%;padding:10px;border-radius:8px;border:1px solid var(--line);
+    background:#0b1220;color:var(--text);font-size:15px;
+  }
+  input[type=text]:focus, input[type=number]:focus{outline:2px solid var(--accent);outline-offset:-1px}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  button{padding:11px 18px;border:none;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer}
+  button:disabled{opacity:.45;cursor:not-allowed}
+  #btnTambah{background:var(--accent);color:#03170a;width:100%;margin-top:12px}
+  #btnBuatPdf{background:var(--accent);color:#03170a}
+  #btnKosongkan{background:transparent;color:var(--muted);border:1px solid var(--line)}
+  #btnMuatUlang{background:transparent;color:var(--muted);border:1px solid var(--line);padding:6px 12px;font-size:12px}
+  .toolbar{display:flex;gap:10px;margin-top:14px;flex-wrap:wrap;align-items:center}
+  .info{font-size:12px;color:var(--muted)}
+
+  table{width:100%;border-collapse:collapse;margin-top:10px;font-size:13px}
+  th, td{padding:8px 6px;text-align:left;border-bottom:1px solid var(--line)}
+  th{color:var(--muted);font-weight:600;font-size:12px}
+  td.no{color:var(--muted);width:28px}
+  td.aksi{width:36px;text-align:right}
+  td.aksi button{padding:5px 9px;font-size:12px;background:transparent;color:var(--err);border:1px solid var(--line)}
+  .kosong{color:var(--muted);font-size:13px;text-align:center;padding:18px 0}
+  .list-wrap{max-height:340px;overflow-y:auto}
+  tr.flash{animation:flash 1.6s ease}
+  @keyframes flash{ from{background:#052e1a} to{background:transparent} }
+
+  details{border:1px solid var(--line);border-radius:10px;padding:2px 12px 10px}
+  summary{font-size:13px;color:var(--muted);cursor:pointer;padding:10px 0}
+
+  .status{font-size:13px;padding:10px 12px;border-radius:8px;margin-top:10px;display:none;line-height:1.5;white-space:pre-line}
+  .status.show{display:block}
+  .status.ok{background:#052e1a;color:#4ade80;border:1px solid #14532d}
+  .status.err{background:#3a0d0d;color:#fca5a5;border:1px solid #7f1d1d}
+  .status.warn{background:#3a2a05;color:#fcd34d;border:1px solid #78350f}
+
+  .modal-overlay{
+    position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;
+    align-items:center;justify-content:center;z-index:50;padding:20px;
+  }
+  .modal-overlay.show{display:flex}
+  .modal-box{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:20px;max-width:340px;width:100%}
+  .modal-box p{font-size:14px;line-height:1.5;margin:0 0 16px}
+  .modal-actions{display:flex;gap:10px;justify-content:flex-end}
+  .modal-actions button{padding:9px 16px}
+  #btnBatalHapus{background:transparent;color:var(--muted);border:1px solid var(--line)}
+  #btnYakinHapus{background:var(--err);color:#fff}
+</style>
+</head>
+<body>
+
+<a class="nav-dashboard" href="index.html"><span class="ico">🏠</span> Dashboard</a>
+<h1>🏷️ Buat Label QR Manual — A4</h1>
+<p class="sub">
+  Isi No Rak dan Part Number satu-satu, daftarnya bertambah di bawah. Kalau sudah lengkap,
+  klik "Buat Label PDF" — langsung jadi satu file PDF A4 siap cetak (3 label per baris,
+  ukuran &amp; jarak sama persis dengan lembar label 70×24&nbsp;mm yang biasa dipakai).
+  Daftarnya <b>disimpan bareng di sheet "Label" pada Excel</b> (bukan lagi cache browser
+  sendiri-sendiri) — jadi <b>semua orang yang buka file ini melihat &amp; bisa menambah
+  daftar yang sama</b>; part yang sudah ada di daftar tidak akan tercatat dobel.
+  Klik "Buat Label PDF" sendiri murni proses di browser, tidak menulis apa pun ke Excel.
+</p>
+
+<div class="status-koneksi">
+  <span class="dot checking" id="dot"></span><span id="statusText">Mengecek koneksi...</span>
+  <button id="btnJalur" type="button">Pindah jalur</button>
+</div>
+<div id="barisAlamat" style="display:none">
+  <input type="text" id="inputAlamat" placeholder="Alamat PC, mis. 192.168.137.1" inputmode="decimal">
+  <button id="btnAlamat" type="button">Sambung</button>
+</div>
+
+<div class="card">
+  <div class="row2">
+    <div>
+      <label>No Rak (Lokasi Rak)</label>
+      <input type="text" id="inputRak" placeholder="mis. F7" autocomplete="off">
+    </div>
+    <div>
+      <label>Part Number E/C</label>
+      <input type="text" id="inputPart" placeholder="mis. 23R-RWZV-K26J-P6" autocomplete="off">
+    </div>
+  </div>
+  <button id="btnTambah" type="button">+ Tambah ke Daftar</button>
+  <div class="info" style="margin-top:8px">
+    Tekan <b>Enter</b> di kolom Part Number untuk langsung menambah &amp; lanjut ke label berikutnya
+    (No Rak tetap terisi kalau labelnya masih satu rak yang sama). Kalau Part Number itu
+    sudah ada di daftar (ditambahkan siapa pun), tidak akan dicatat dobel.
+  </div>
+  <div class="status" id="statusTambah"></div>
+</div>
+
+<div class="card">
+  <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+    <b style="font-size:14px">Daftar Label bersama (<span id="jumlahLabel">0</span>)</b>
+    <span style="display:flex;align-items:center;gap:8px">
+      <span class="info" id="infoHalaman"></span>
+      <button id="btnMuatUlang" type="button">🔄 Muat ulang</button>
+    </span>
+  </div>
+  <div class="list-wrap">
+    <table id="tabelLabel">
+      <thead><tr><th class="no">No</th><th>No Rak</th><th>Part Number E/C</th><th class="aksi"></th></tr></thead>
+      <tbody id="isiTabel"></tbody>
+    </table>
+    <div class="kosong" id="pesanKosong">Belum ada label. Isi form di atas lalu klik "+ Tambah ke Daftar".</div>
+  </div>
+
+  <div class="toolbar">
+    <button id="btnBuatPdf" type="button">📄 Buat Label PDF (A4)</button>
+    <button id="btnKosongkan" type="button">Kosongkan Semua</button>
+  </div>
+  <div class="status" id="statusPdf"></div>
+</div>
+
+<details>
+  <summary>⚙️ Pengaturan ukuran font (jarang perlu diubah)</summary>
+  <div class="row2">
+    <div>
+      <label>Ukuran maks. No Rak (pt)</label>
+      <input type="number" id="cfgUkuranAtas" value="20" min="8" max="40" step="1">
+    </div>
+    <div>
+      <label>Ukuran maks. Part Number (pt)</label>
+      <input type="number" id="cfgUkuranBawah" value="12" min="5" max="30" step="1">
+    </div>
+  </div>
+  <p class="info" style="margin-top:8px">
+    Ini batas MAKSIMUM. Kalau teksnya kepanjangan buat muat di satu label,
+    fontnya otomatis dikecilkan sendiri (sama seperti generator label dari Excel) —
+    tidak akan pernah meluber ke label sebelahnya.
+  </p>
+</details>
+
+<div class="modal-overlay" id="modalHapus">
+  <div class="modal-box">
+    <p>Kosongkan seluruh daftar label bersama (<span id="modalJumlah">0</span> item)?
+       Ini akan menghapusnya untuk SEMUA orang yang memakai daftar ini. Tidak bisa dibatalkan.</p>
+    <div class="modal-actions">
+      <button id="btnBatalHapus" type="button">Batal</button>
+      <button id="btnYakinHapus" type="button">Ya, Kosongkan</button>
+    </div>
+  </div>
+</div>
+
+<script src="qrcode-gen.lib.js"></script>
+<script src="jspdf.umd.min.js"></script>
+<script>
+// =====================================================================
+//  GEOMETRI LEMBAR LABEL - SAMA PERSIS dengan buat_label_qr.py, supaya
+//  label dari halaman ini pas dipakai di lembar label fisik yang sama
+//  (70x24mm per label, 3 kolom x 12 baris = 36 label per lembar A4).
+//  JANGAN diubah kecuali lembar label fisiknya memang beda ukuran.
+// =====================================================================
+const PITCH_X = 70.0, PITCH_Y = 24.0;           // jarak antar label (ukuran lembar label fisik)
+const LEBAR_LABEL = 68.0, TINGGI_LABEL = 22.0;  // kotak bergaris yang dicetak (lebih kecil dari pitch -> ada jarak antar label)
+const HAL_LEBAR = 210.0, HAL_TINGGI = 297.0;    // A4
+const KOLOM = 3, BARIS = 12;                    // 36 label / lembar
+const LEBAR_KOLOM_QR = 23.0;                    // lebar kotak QR di dalam label
+const SISI_QR = 17.0;                           // sisi QR (mm)
+const PADDING_KIRI = 2.5, PADDING_KANAN = 2.0;  // jarak isi dari garis label
+const MIN_UKURAN_ATAS = 8, MIN_UKURAN_BAWAH = 5;
+const BUFFER_TEKS = 1.0;
+
+const JARAK_X = PITCH_X - LEBAR_LABEL;
+const JARAK_Y = PITCH_Y - TINGGI_LABEL;
+const MARGIN_KIRI = (HAL_LEBAR - KOLOM * PITCH_X) / 2 + JARAK_X / 2;
+const MARGIN_ATAS = (HAL_TINGGI - BARIS * PITCH_Y) / 2 + JARAK_Y / 2;
+const LEBAR_TEKS = LEBAR_LABEL - LEBAR_KOLOM_QR;
+
+// ---------------------------------------------------------------
+//  LEBAR HURUF (Arial-compatible) - PERSIS sama dengan tabel yang dipakai
+//  buat_label_qr.py, supaya keputusan auto-shrink font-nya konsisten
+//  antara label dari Excel dan label manual ini.
+// ---------------------------------------------------------------
+const LEBAR_HURUF_REGULAR = {" ": 0.2778, "!": 0.2778, "\"": 0.355, "#": 0.5562, "%": 0.8892, "&": 0.667, "'": 0.1909, "(": 0.333, ")": 0.333, "*": 0.3892, "+": 0.584, ",": 0.2778, "-": 0.333, ".": 0.2778, "/": 0.2778, "0": 0.5562, "1": 0.5562, "2": 0.5562, "3": 0.5562, "4": 0.5562, "5": 0.5562, "6": 0.5562, "7": 0.5562, "8": 0.5562, "9": 0.5562, ":": 0.2778, ";": 0.2778, "<": 0.584, "=": 0.584, ">": 0.584, "?": 0.5562, "@": 1.0151, "A": 0.667, "B": 0.667, "C": 0.7222, "D": 0.7222, "E": 0.667, "F": 0.6108, "G": 0.7778, "H": 0.7222, "I": 0.2778, "J": 0.5, "K": 0.667, "L": 0.5562, "M": 0.833, "N": 0.7222, "O": 0.7778, "P": 0.667, "Q": 0.7778, "R": 0.7222, "S": 0.667, "T": 0.6108, "U": 0.7222, "V": 0.667, "W": 0.9438, "X": 0.667, "Y": 0.667, "Z": 0.6108, "[": 0.2778, "]": 0.2778, "_": 0.5562, "a": 0.5562, "b": 0.5562, "c": 0.5, "d": 0.5562, "e": 0.5562, "f": 0.2778, "g": 0.5562, "h": 0.5562, "i": 0.2222, "j": 0.2222, "k": 0.5, "l": 0.2222, "m": 0.833, "n": 0.5562, "o": 0.5562, "p": 0.5562, "q": 0.5562, "r": 0.333, "s": 0.5, "t": 0.2778, "u": 0.5562, "v": 0.5, "w": 0.7222, "x": 0.5, "y": 0.5, "z": 0.5, "{": 0.334, "}": 0.334, " ": 0.2778};
+const LEBAR_HURUF_BOLD = {" ": 0.2778, "!": 0.333, "\"": 0.4741, "#": 0.5562, "%": 0.8892, "&": 0.7222, "'": 0.2378, "(": 0.333, ")": 0.333, "*": 0.3892, "+": 0.584, ",": 0.2778, "-": 0.333, ".": 0.2778, "/": 0.2778, "0": 0.5562, "1": 0.5562, "2": 0.5562, "3": 0.5562, "4": 0.5562, "5": 0.5562, "6": 0.5562, "7": 0.5562, "8": 0.5562, "9": 0.5562, ":": 0.333, ";": 0.333, "<": 0.584, "=": 0.584, ">": 0.584, "?": 0.6108, "@": 0.9751, "A": 0.7222, "B": 0.7222, "C": 0.7222, "D": 0.7222, "E": 0.667, "F": 0.6108, "G": 0.7778, "H": 0.7222, "I": 0.2778, "J": 0.5562, "K": 0.7222, "L": 0.6108, "M": 0.833, "N": 0.7222, "O": 0.7778, "P": 0.667, "Q": 0.7778, "R": 0.7222, "S": 0.667, "T": 0.6108, "U": 0.7222, "V": 0.667, "W": 0.9438, "X": 0.667, "Y": 0.667, "Z": 0.6108, "[": 0.333, "]": 0.333, "_": 0.5562, "a": 0.5562, "b": 0.6108, "c": 0.5562, "d": 0.6108, "e": 0.5562, "f": 0.333, "g": 0.6108, "h": 0.6108, "i": 0.2778, "j": 0.2778, "k": 0.5562, "l": 0.2778, "m": 0.8892, "n": 0.6108, "o": 0.6108, "p": 0.6108, "q": 0.6108, "r": 0.3892, "s": 0.5562, "t": 0.333, "u": 0.6108, "v": 0.5562, "w": 0.7778, "x": 0.5562, "y": 0.5562, "z": 0.5, "{": 0.3892, "}": 0.3892, " ": 0.2778};
+const LEBAR_HURUF_DEFAULT = 0.6;
+
+function lebarTeksMm(t, ukuranPt, bold){
+  const tabel = bold ? LEBAR_HURUF_BOLD : LEBAR_HURUF_REGULAR;
+  let em = 0;
+  for (const c of String(t)) em += (tabel[c] !== undefined ? tabel[c] : LEBAR_HURUF_DEFAULT);
+  return em * ukuranPt * (25.4 / 72.0);
+}
+
+// Ukuran font terbesar (<= maksimum, >= minimum) yang membuat teks muat
+// dalam SATU BARIS selebar lebarTersediaMm. Sama persis logikanya dengan
+// ukuran_pas() di buat_label_qr.py.
+function ukuranPas(t, maksimum, lebarTersediaMm, bold, minimum, langkah){
+  langkah = langkah || 0.5;
+  let pt = maksimum;
+  if (lebarTeksMm(t, pt, bold) <= lebarTersediaMm) return pt;
+  while (pt > minimum){
+    pt -= langkah;
+    if (lebarTeksMm(t, pt, bold) <= lebarTersediaMm) return pt;
+  }
+  return minimum;
+}
+
+// ---------------------------------------------------------------
+//  QR (pakai qrcode-gen.lib.js yang sama dengan qrcode_generator.html)
+// ---------------------------------------------------------------
+function buatQR(teks){
+  // Turunkan koreksi kesalahan ke L kalau modulnya jadi terlalu rapat -
+  // sama seperti buat_png() di buat_label_qr.py: di label sekecil ini,
+  // modul kecil bikin HP susah membacanya.
+  let qr, level = 'M';
+  qr = qrcode(0, level);
+  qr.addData(String(teks));
+  qr.make();
+  if (qr.getModuleCount() > 29){
+    level = 'L';
+    qr = qrcode(0, level);
+    qr.addData(String(teks));
+    qr.make();
+  }
+  return qr;
+}
+
+// Gambar QR sebagai kotak-kotak VEKTOR langsung ke PDF (bukan gambar
+// raster) - hasilnya tetap tajam walau di-zoom / dicetak besar.
+function gambarQR(doc, qr, x, y, sisiMm){
+  const n = qr.getModuleCount();
+  const modul = sisiMm / n;
+  doc.setFillColor(0, 0, 0);
+  for (let r = 0; r < n; r++){
+    for (let c = 0; c < n; c++){
+      if (qr.isDark(r, c)){
+        doc.rect(x + c * modul, y + r * modul, modul, modul, 'F');
+      }
+    }
+  }
+}
+
+function pt2mm(pt){ return pt * 0.352778; }
+
+// =====================================================================
+//  Deteksi jalur ke PC - SAMA persis pola dengan scan.html/cari_lokasi.html:
+//  jalur LOKAL (langsung ke PC lewat WiFi/hotspot yang sama) dengan fallback
+//  otomatis ke jalur BROKER (MQTT lewat internet) kalau PC beda jaringan -
+//  jadi daftar label bersama ini tetap bisa dibaca/ditambah dari mana saja,
+//  bukan cuma yang satu WiFi dengan PC.
+// =====================================================================
+const dot = document.getElementById('dot');
+const statusText = document.getElementById('statusText');
+// Satu titik kebenaran untuk warna/animasi indikator koneksi - lihat
+// penjelasan lengkap di scan.html (file sumber pola ini).
+function setDotState(state){
+  dot.className = 'dot ' + state;
+}
+const barisAlamat = document.getElementById('barisAlamat');
+const inputAlamat = document.getElementById('inputAlamat');
+const btnAlamat = document.getElementById('btnAlamat');
+const btnJalur = document.getElementById('btnJalur');
+
+let transport = 'mqtt';
+let apiBase = '';
+const PORT_HTTP_PC = 5001;
+
+function setStatusKoneksi(tersambung, ket){
+  setDotState(tersambung ? 'local' : 'off');
+  statusText.textContent = ket;
+}
+
+function setTransport(mode, alasan){
+  transport = mode;
+  if (mode === 'lokal'){
+    setDotState('local');
+    statusText.textContent = 'Jalur LOKAL — langsung ke PC' + (apiBase ? ' (' + apiBase.replace('http://','') + ')' : '');
+    btnJalur.textContent = 'Pindah ke broker';
+    barisAlamat.style.display = 'none';
+  } else {
+    setDotState('checking');
+    statusText.textContent = 'Jalur BROKER — ' + (alasan || 'lewat internet');
+    btnJalur.textContent = 'Coba jalur lokal';
+    barisAlamat.style.display = 'flex';
+    loadMqttLib();
+  }
+}
+
+// Pembungkus fetch dengan batas waktu (AbortController) - supaya kalau PC/Excel
+// macet (mis. ada sel dalam mode edit di Excel), permintaan GAGAL JELAS dalam
+// waktu wajar, bukan bikin tombol tambah/hapus label menggantung tanpa akhir
+// kalau backend-nya sendiri tidak pernah sempat kembali.
+async function fetchDenganBatasWaktu(url, opt, ms){
+  ms = ms || 15000;
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), ms);
+  try{
+    return await fetch(url, Object.assign({}, opt, { signal: ctrl.signal }));
+  }catch(e){
+    if (e.name === 'AbortError'){
+      throw new Error('PC tidak merespons dalam ' + Math.round(ms / 1000) + ' detik '
+        + '(kemungkinan Excel macet - ada sel dalam mode edit). Coba lagi.');
+    }
+    throw e;
+  }finally{
+    clearTimeout(t);
+  }
+}
+
+async function cobaHealth(base){
+  try{
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 2500);
+    const r = await fetch(base + '/api/health', { cache: 'no-store', signal: ctrl.signal });
+    clearTimeout(t);
+    return r.ok;
+  }catch(e){ return false; }
+}
+
+async function deteksiJalur(){
+  setDotState('checking');
+  statusText.textContent = 'Mengecek koneksi ke PC...';
+
+  if (await cobaHealth('')){ apiBase = ''; setTransport('lokal'); return true; }
+  const simpan = (localStorage.getItem('alamatPC') || '').trim();
+  if (simpan){
+    const base = 'http://' + simpan + ':' + PORT_HTTP_PC;
+    if (await cobaHealth(base)){ apiBase = base; setTransport('lokal'); return true; }
+  }
+  apiBase = '';
+  setTransport('mqtt', simpan ? 'PC tidak menjawab' : 'alamat PC belum diisi');
+  return true;   // jalur broker tetap dianggap "siap dicoba" - muatDaftar() jalan lewat MQTT
+}
+
+inputAlamat.value = localStorage.getItem('alamatPC') || '';
+btnAlamat.addEventListener('click', async () => {
+  const v = inputAlamat.value.trim().replace(/^https?:\/\//, '').replace(/[:/].*$/, '');
+  if (!v) return;
+  try{ localStorage.setItem('alamatPC', v); }catch(e){}
+  btnAlamat.textContent = 'Mencoba...';
+  const base = 'http://' + v + ':' + PORT_HTTP_PC;
+  if (await cobaHealth(base)){
+    apiBase = base;
+    setTransport('lokal');
+    muatDaftar();
+  } else {
+    setStatusKoneksi(false, 'PC ' + v + ' tidak menjawab di port ' + PORT_HTTP_PC);
+  }
+  btnAlamat.textContent = 'Sambung';
+});
+btnJalur.addEventListener('click', () => {
+  if (transport === 'lokal') setTransport('mqtt', 'dipilih manual');
+  else deteksiJalur();
+});
+
+function loadScript(src, onload, onerror){
+  const s = document.createElement('script');
+  s.src = src;
+  s.onload = onload;
+  s.onerror = onerror;
+  document.head.appendChild(s);
+}
+
+// ---------- Jalur BROKER (MQTT) - HARUS SAMA PERSIS dengan BROKER_HOST/PORT/
+// TOPIC di mqtt_subscriber.py (PC), dan sama juga dengan scan.html/
+// cari_lokasi.html supaya satu mqtt_subscriber.py melayani semuanya. ----------
+const MQTT_BROKER_URL = 'wss://broker.emqx.io:8084/mqtt';
+const MQTT_TOPIC = 'poshheader/qrscan/883f4243';
+const T_LABEL_LIST_REQ = MQTT_TOPIC + '/label/list/req';
+const T_LABEL_LIST_RES = MQTT_TOPIC + '/label/list/res';
+const T_LABEL_TAMBAH_REQ = MQTT_TOPIC + '/label/tambah/req';
+const T_LABEL_TAMBAH_RES = MQTT_TOPIC + '/label/tambah/res';
+const T_LABEL_HAPUS_REQ = MQTT_TOPIC + '/label/hapus/req';
+const T_LABEL_HAPUS_RES = MQTT_TOPIC + '/label/hapus/res';
+const T_LABEL_KOSONGKAN_REQ = MQTT_TOPIC + '/label/kosongkan/req';
+const T_LABEL_KOSONGKAN_RES = MQTT_TOPIC + '/label/kosongkan/res';
+
+let mqttClient = null;
+let mqttEverConnected = false;
+
+function loadMqttLib(){
+  if (typeof mqtt !== 'undefined'){ connectMqtt(); return; }
+  loadScript('mqtt.lib.js', connectMqtt, () => {
+    loadScript('https://cdn.jsdelivr.net/npm/mqtt@5.15.2/dist/mqtt.min.js', connectMqtt, () => {
+      setDotState('off');
+      statusText.textContent = '⚠️ Gagal memuat library MQTT (lokal & CDN)';
+    });
+  });
+}
+
+function connectMqtt(){
+  if (mqttClient) return;
+  if (typeof mqtt === 'undefined'){
+    statusText.textContent = '⚠️ Gagal memuat library MQTT';
+    return;
+  }
+  setDotState('checking');
+  statusText.textContent = 'Menghubungkan ke broker MQTT...';
+  try{
+    mqttClient = mqtt.connect(MQTT_BROKER_URL, {
+      clientId: 'buat-label-' + Math.random().toString(16).slice(2, 10),
+      reconnectPeriod: 3000,
+      connectTimeout: 8000,
+      clean: true,
+    });
+  }catch(err){
+    statusText.textContent = '⚠️ Gagal inisialisasi MQTT: ' + err.message;
+    return;
+  }
+
+  mqttClient.on('connect', () => {
+    mqttEverConnected = true;
+    if (transport === 'mqtt'){ setDotState('broker'); statusText.textContent = 'Terhubung ke broker MQTT'; }
+    mqttClient.subscribe([T_LABEL_LIST_RES, T_LABEL_TAMBAH_RES, T_LABEL_HAPUS_RES, T_LABEL_KOSONGKAN_RES], { qos: 1 });
+    muatDaftar(true);   // baru bisa muat daftar setelah benar-benar konek ke broker
+  });
+  mqttClient.on('message', (topic, message) => {
+    let data;
+    try{ data = JSON.parse(message.toString()); }catch(e){ return; }
+    selesaikanRespons(data);
+  });
+  mqttClient.on('reconnect', () => {
+    if (transport === 'mqtt'){ setDotState('checking'); statusText.textContent = 'Menyambung ulang ke broker...'; }
+  });
+  mqttClient.on('close', () => {
+    if (transport === 'mqtt'){ setDotState('off'); statusText.textContent = 'Terputus dari broker'; }
+  });
+  mqttClient.on('error', (err) => {
+    if (transport === 'mqtt'){
+      setDotState('off');
+      statusText.textContent = 'Error MQTT: ' + (err && err.message ? err.message : err);
+    }
+  });
+
+  setTimeout(() => {
+    if (!mqttEverConnected && transport === 'mqtt'){
+      statusText.textContent = '⚠️ Belum tersambung ke broker setelah 10 detik (jaringan mungkin memblokir port 8084)';
+    }
+  }, 10000);
+}
+
+// ---- Pola request/response di atas MQTT (sama seperti cari_lokasi.html):
+// publish ke topic .../req dengan reqId acak, PC balas ke topic .../res
+// dengan reqId yang sama - satu handler 'message' melayani semua jenis
+// permintaan (muat daftar, tambah, hapus, kosongkan) sekaligus. ----
+const menungguRespons = new Map();   // reqId -> { resolve, reject, timer }
+
+function selesaikanRespons(data){
+  const p = menungguRespons.get(data.reqId);
+  if (!p) return;
+  menungguRespons.delete(data.reqId);
+  clearTimeout(p.timer);
+  if (data.ok) p.resolve(data); else p.reject(new Error(data.error || 'tidak diketahui'));
+}
+
+function mqttRequest(topicReq, payload, timeoutMs){
+  timeoutMs = timeoutMs || 8000;
+  return new Promise((resolve, reject) => {
+    if (!mqttClient || !mqttClient.connected){
+      reject(new Error('Belum tersambung ke broker MQTT.'));
+      return;
+    }
+    const reqId = 'r' + Date.now() + Math.random().toString(16).slice(2, 6);
+    const timer = setTimeout(() => {
+      menungguRespons.delete(reqId);
+      reject(new Error('Tidak ada jawaban dari PC dalam ' + (timeoutMs/1000) + ' detik. Pastikan mqtt_subscriber.py sedang jalan.'));
+    }, timeoutMs);
+    menungguRespons.set(reqId, { resolve, reject, timer });
+    mqttClient.publish(topicReq, JSON.stringify(Object.assign({ reqId }, payload)), { qos: 1 }, (err) => {
+      if (err){
+        clearTimeout(timer);
+        menungguRespons.delete(reqId);
+        reject(err);
+      }
+    });
+  });
+}
+
+// ---------- Identitas pengirim (OTOMATIS) - SAMA persis pola dengan scan.html.
+// Lewat jalur LOKAL, "ditambahkan oleh" tetap diisi server dari IP/nama host
+// (paling meyakinkan). Lewat jalur BROKER, PC tidak melihat IP asli HP sama
+// sekali - jadi tanpa ini, kolom "oleh" cuma akan bilang "tidak diketahui".
+// Dikirim di KEDUA jalur supaya konsisten & sebagai cadangan kalau nama host
+// gagal terdeteksi di jalur lokal juga. ----------
+function modelDariUA(){
+  const ua = navigator.userAgent || '';
+  const m = ua.match(/Android[^;]*;\s*([^;)]+)[;)]/i);
+  if (m && m[1]){
+    const v = m[1].split(/\s+Build/i)[0].trim();
+    if (v && !/^wv$/i.test(v)) return v.slice(0, 30);
+  }
+  if (/iPhone/i.test(ua)) return 'iPhone';
+  if (/iPad/i.test(ua)) return 'iPad';
+  if (/Windows/i.test(ua)) return 'PC-Windows';
+  return 'Perangkat';
+}
+
+function kodeUnikPerangkat(){
+  let id = '';
+  try{ id = localStorage.getItem('idPerangkat') || ''; }catch(e){}
+  if (!id){
+    id = Math.random().toString(36).slice(2, 6).toUpperCase();
+    try{ localStorage.setItem('idPerangkat', id); }catch(e){}
+  }
+  return id;
+}
+
+async function deteksiPerangkat(){
+  let model = '';
+  try{
+    if (navigator.userAgentData && navigator.userAgentData.getHighEntropyValues){
+      const d = await navigator.userAgentData.getHighEntropyValues(['model']);
+      if (d && d.model) model = String(d.model).trim();
+    }
+  }catch(e){}
+  if (!model) model = modelDariUA();
+  return model + ' #' + kodeUnikPerangkat();
+}
+
+let namaPerangkat = '';   // diisi sekali di IIFE paling bawah, dikirim tiap "+ Tambah ke Daftar"
+
+// =====================================================================
+//  DAFTAR LABEL - SEKARANG disimpan bareng di sheet "Label" pada Excel
+//  (lewat server.py -> excel_writer.py), BUKAN lagi localStorage per-browser.
+//  Efeknya: semua orang yang buka file Excel ini melihat & bisa menambah
+//  daftar yang SAMA, dan part yang sudah ada tidak tercatat dobel.
+//  Membuat PDF sendiri TETAP murni proses di browser (tidak menulis apa pun
+//  ke Excel) - yang dikirim ke server cuma isi daftarnya (No Rak + Part
+//  Number), bukan hasil PDF-nya.
+// =====================================================================
+let daftar = [];           // [{row, rak, part, ditambahkan, oleh}, ...]
+let sedangMuat = false;
+
+const inputRak = document.getElementById('inputRak');
+const inputPart = document.getElementById('inputPart');
+const btnTambah = document.getElementById('btnTambah');
+const btnMuatUlang = document.getElementById('btnMuatUlang');
+const isiTabel = document.getElementById('isiTabel');
+const pesanKosong = document.getElementById('pesanKosong');
+const jumlahLabelEl = document.getElementById('jumlahLabel');
+const infoHalaman = document.getElementById('infoHalaman');
+const statusTambah = document.getElementById('statusTambah');
+const statusPdf = document.getElementById('statusPdf');
+const btnBuatPdf = document.getElementById('btnBuatPdf');
+const btnKosongkan = document.getElementById('btnKosongkan');
+const modalHapus = document.getElementById('modalHapus');
+const modalJumlah = document.getElementById('modalJumlah');
+
+function tampilkanStatus(el, pesan, tipe){
+  el.textContent = pesan;
+  el.className = 'status show ' + tipe;
+}
+function sembunyikanStatus(el){
+  el.className = 'status';
+  el.textContent = '';
+}
+
+function renderTabel(sorotRow){
+  isiTabel.innerHTML = '';
+  pesanKosong.style.display = daftar.length ? 'none' : 'block';
+  document.getElementById('tabelLabel').style.display = daftar.length ? 'table' : 'none';
+
+  daftar.forEach((item, i) => {
+    const tr = document.createElement('tr');
+    if (item.oleh || item.ditambahkan){
+      tr.title = 'Ditambahkan' + (item.oleh ? ' oleh ' + item.oleh : '') +
+                 (item.ditambahkan ? ' pada ' + item.ditambahkan : '');
+    }
+    if (sorotRow != null && item.row === sorotRow) tr.className = 'flash';
+
+    const tdNo = document.createElement('td');
+    tdNo.className = 'no';
+    tdNo.textContent = i + 1;
+
+    const tdRak = document.createElement('td');
+    tdRak.textContent = item.rak || '(kosong)';
+
+    const tdPart = document.createElement('td');
+    tdPart.textContent = item.part;
+
+    const tdAksi = document.createElement('td');
+    tdAksi.className = 'aksi';
+    const btnHapus = document.createElement('button');
+    btnHapus.type = 'button';
+    btnHapus.textContent = '✕';
+    btnHapus.title = 'Hapus baris ini (untuk semua orang)';
+    btnHapus.addEventListener('click', () => hapusBaris(item, btnHapus));
+    tdAksi.appendChild(btnHapus);
+
+    tr.append(tdNo, tdRak, tdPart, tdAksi);
+    isiTabel.appendChild(tr);
+  });
+
+  jumlahLabelEl.textContent = daftar.length;
+  if (daftar.length){
+    const halaman = Math.ceil(daftar.length / (KOLOM * BARIS));
+    infoHalaman.textContent = halaman + ' lembar A4 (' + (KOLOM * BARIS) + ' label/lembar)';
+  } else {
+    infoHalaman.textContent = '';
+  }
+  btnBuatPdf.disabled = daftar.length === 0;
+}
+
+// Satu jalur panggil untuk semua operasi label (list/tambah/hapus/kosongkan) -
+// lewat jalur lokal ATAU broker tergantung `transport` saat ini, jadi keempat
+// operasi ini otomatis ikut jalur yang sedang aktif tanpa duplikasi kode.
+async function panggilLabel({ lokalPath, lokalMethod, lokalBody, mqttTopic, mqttPayload }){
+  if (transport === 'lokal'){
+    if (!apiBase && !(await cobaHealth(''))) throw new Error('Belum tersambung ke PC.');
+    const opt = { method: lokalMethod || 'GET' };
+    if (opt.method === 'GET') opt.cache = 'no-store';
+    if (lokalBody !== undefined){
+      opt.headers = { 'Content-Type': 'application/json' };
+      opt.body = JSON.stringify(lokalBody);
+    }
+    const r = await fetchDenganBatasWaktu(apiBase + lokalPath, opt);
+    const data = await r.json();
+    if (!data.ok) throw new Error(data.error || 'gagal');
+    return data;
+  }
+  if (!mqttClient || !mqttClient.connected) throw new Error('Belum tersambung ke broker MQTT.');
+  return mqttRequest(mqttTopic, mqttPayload || {});
+}
+
+async function muatDaftar(diam){
+  if (sedangMuat) return;
+  sedangMuat = true;
+  if (!diam) btnMuatUlang.textContent = 'Memuat...';
+  try{
+    const data = await panggilLabel({ lokalPath: '/api/label', lokalMethod: 'GET', mqttTopic: T_LABEL_LIST_REQ });
+    daftar = (data.items || []).map(it => ({
+      row: it.row, rak: it.rak || '', part: it.part || '',
+      ditambahkan: it.ditambahkan || '', oleh: it.oleh || '',
+    }));
+    renderTabel();
+  }catch(e){
+    if (!diam) tampilkanStatus(statusTambah, 'Gagal memuat daftar dari PC: ' + e.message, 'err');
+  }finally{
+    sedangMuat = false;
+    btnMuatUlang.textContent = '🔄 Muat ulang';
+  }
+}
+
+async function tambahDariForm(){
+  const rak = inputRak.value.trim();
+  const part = inputPart.value.trim();
+
+  if (!part){
+    tampilkanStatus(statusTambah, 'Part Number E/C wajib diisi.', 'err');
+    inputPart.focus();
+    return;
+  }
+
+  btnTambah.disabled = true;
+  btnTambah.textContent = 'Menyimpan...';
+  try{
+    const data = await panggilLabel({
+      lokalPath: '/api/label/tambah', lokalMethod: 'POST', lokalBody: { rak, part, perangkat: namaPerangkat },
+      mqttTopic: T_LABEL_TAMBAH_REQ, mqttPayload: { rak, part, perangkat: namaPerangkat },
+    });
+
+    await muatDaftar(true);
+
+    if (data.duplikat){
+      tampilkanStatus(statusTambah,
+        `"${part}" sudah ada di daftar` + (data.item && data.item.oleh ? ` (ditambahkan oleh ${data.item.oleh})` : '') +
+        ' - tidak dicatat dobel.', 'warn');
+      if (data.item) renderTabel(data.item.row);
+    } else {
+      sembunyikanStatus(statusTambah);
+    }
+
+    inputPart.value = '';
+    inputPart.focus();
+  }catch(e){
+    tampilkanStatus(statusTambah, 'Gagal menyimpan ke PC: ' + e.message, 'err');
+  }finally{
+    btnTambah.disabled = false;
+    btnTambah.textContent = '+ Tambah ke Daftar';
+  }
+}
+
+async function hapusBaris(item, tombol){
+  tombol.disabled = true;
+  try{
+    await panggilLabel({
+      lokalPath: '/api/label/hapus', lokalMethod: 'POST', lokalBody: { row: item.row },
+      mqttTopic: T_LABEL_HAPUS_REQ, mqttPayload: { row: item.row },
+    });
+    await muatDaftar(true);
+    sembunyikanStatus(statusPdf);
+  }catch(e){
+    tampilkanStatus(statusPdf, 'Gagal menghapus baris: ' + e.message, 'err');
+    tombol.disabled = false;
+  }
+}
+
+btnTambah.addEventListener('click', tambahDariForm);
+btnMuatUlang.addEventListener('click', () => muatDaftar(false));
+inputPart.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter'){ e.preventDefault(); tambahDariForm(); }
+});
+inputRak.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter'){ e.preventDefault(); inputPart.focus(); }
+});
+
+btnKosongkan.addEventListener('click', () => {
+  if (!daftar.length) return;
+  modalJumlah.textContent = daftar.length;
+  modalHapus.classList.add('show');
+});
+document.getElementById('btnBatalHapus').addEventListener('click', () => {
+  modalHapus.classList.remove('show');
+});
+document.getElementById('btnYakinHapus').addEventListener('click', async () => {
+  modalHapus.classList.remove('show');
+  try{
+    await panggilLabel({
+      lokalPath: '/api/label/kosongkan', lokalMethod: 'POST',
+      mqttTopic: T_LABEL_KOSONGKAN_REQ,
+    });
+    await muatDaftar(true);
+    sembunyikanStatus(statusPdf);
+  }catch(e){
+    tampilkanStatus(statusPdf, 'Gagal mengosongkan daftar: ' + e.message, 'err');
+  }
+});
+
+// Muat ulang otomatis secara berkala (supaya tambahan dari HP/PC lain ikut
+// kelihatan tanpa perlu refresh manual) dan waktu tab ini dibuka kembali.
+setInterval(() => muatDaftar(true), 8000);
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') muatDaftar(true);
+});
+
+// =====================================================================
+//  BUAT PDF - murni di browser, TIDAK menulis apa pun ke Excel/server.
+// =====================================================================
+btnBuatPdf.addEventListener('click', () => {
+  if (!daftar.length){
+    tampilkanStatus(statusPdf, 'Daftar masih kosong - tambah label dulu.', 'err');
+    return;
+  }
+
+  const UKURAN_ATAS = Number(document.getElementById('cfgUkuranAtas').value) || 20;
+  const UKURAN_BAWAH = Number(document.getElementById('cfgUkuranBawah').value) || 12;
+  const lebarTersedia = LEBAR_TEKS - PADDING_KANAN - BUFFER_TEKS;
+
+  // Tab PDF-nya WAJIB dibuka di sini (langsung di dalam handler klik, SEBELUM
+  // setTimeout) - supaya masih dianggap browser sebagai "dibuka karena user
+  // klik" dan tidak diblokir popup blocker. Nanti isinya baru ditukar ke PDF
+  // asli setelah selesai dibuat (lihat jendelaPdf.location.href di bawah).
+  const jendelaPdf = window.open('', '_blank');
+  if (jendelaPdf){
+    jendelaPdf.document.write(
+      '<title>Menyiapkan PDF...</title>' +
+      '<body style="font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;' +
+      'display:flex;align-items:center;justify-content:center;height:100vh;margin:0;' +
+      'color:#475569">Menyiapkan PDF label, mohon tunggu...</body>'
+    );
+  }
+
+  btnBuatPdf.disabled = true;
+  btnBuatPdf.textContent = 'Membuat PDF...';
+  sembunyikanStatus(statusPdf);
+
+  // setTimeout supaya tombol sempat berubah teksnya dulu sebelum kerja berat
+  // (generate QR + gambar ratusan label) memblokir thread UI.
+  setTimeout(() => {
+    try {
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF({ unit: 'mm', format: 'a4', compress: true });
+      doc.setLineWidth(0.2);
+      doc.setDrawColor(0, 0, 0);
+
+      const perHalaman = KOLOM * BARIS;
+      let diperkecil = 0, meluber = 0;
+      const contohMeluber = [];
+
+      for (let i = 0; i < daftar.length; i++){
+        const halamanKe = Math.floor(i / perHalaman);
+        const posDiHalaman = i % perHalaman;
+        const b = Math.floor(posDiHalaman / KOLOM);
+        const k = posDiHalaman % KOLOM;
+
+        if (halamanKe > 0 && posDiHalaman === 0) doc.addPage();
+
+        const x0 = MARGIN_KIRI + k * PITCH_X;
+        const y0 = MARGIN_ATAS + b * PITCH_Y;
+        const { rak, part } = daftar[i];
+
+        // Kotak label
+        doc.rect(x0, y0, LEBAR_LABEL, TINGGI_LABEL);
+
+        // QR - dipusatkan di kolom QR (memperhitungkan padding kiri, sama
+        // seperti perataan "center" di dalam sel yang sudah diberi margin
+        // kiri pada versi Word-nya)
+        const qr = buatQR(part);
+        const qrX = x0 + PADDING_KIRI + (LEBAR_KOLOM_QR - PADDING_KIRI - SISI_QR) / 2;
+        const qrY = y0 + (TINGGI_LABEL - SISI_QR) / 2;
+        gambarQR(doc, qr, qrX, qrY, SISI_QR);
+
+        // Teks: No Rak (atas, tebal) + Part Number (bawah) - auto-shrink
+        // kalau kepanjangan, PERSIS logika buat_label_qr.py.
+        const szAtas = ukuranPas(rak, UKURAN_ATAS, lebarTersedia, true, MIN_UKURAN_ATAS);
+        const szBawah = ukuranPas(part, UKURAN_BAWAH, lebarTersedia, false, MIN_UKURAN_BAWAH);
+        if (szAtas < UKURAN_ATAS || szBawah < UKURAN_BAWAH) diperkecil++;
+        if (lebarTeksMm(part, szBawah, false) > lebarTersedia){
+          meluber++;
+          if (contohMeluber.length < 6) contohMeluber.push(part);
+        }
+
+        // Teks di-tengah-kan (center) secara horizontal di dalam kolom teks
+        // (lebar kolom dikurangi PADDING_KANAN, supaya tetap ada jarak aman
+        // ke garis kanan label persis seperti batas yang dipakai auto-shrink).
+        const xTeks = x0 + LEBAR_KOLOM_QR;
+        const xTengah = xTeks + (LEBAR_TEKS - PADDING_KANAN) / 2;
+        const h1 = pt2mm(szAtas) * 1.15;
+        const h2 = pt2mm(szBawah) * 1.15;
+        const totalH = h1 + h2;
+        let curY = y0 + (TINGGI_LABEL - totalH) / 2;
+
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(szAtas);
+        doc.text(rak || '-', xTengah, curY + pt2mm(szAtas) * 0.8, { align: 'center' });
+        curY += h1;
+
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(szBawah);
+        doc.text(part, xTengah, curY + pt2mm(szBawah) * 0.8, { align: 'center' });
+      }
+
+      const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+      let pesan;
+      if (jendelaPdf && !jendelaPdf.closed){
+        // Tukar isi tab yang sudah dibuka tadi jadi PDF asli (native PDF
+        // viewer bawaan browser) - operator tinggal Ctrl+P / klik ikon print
+        // di situ, tidak perlu cari-cari file hasil unduhan dulu.
+        const blobUrl = doc.output('bloburl');
+        jendelaPdf.location.href = blobUrl;
+        // Coba langsung buka dialog print-nya juga (didukung Chrome/Edge).
+        // Kalau tidak didukung/browser lain, operator tetap bisa pencet
+        // Ctrl+P sendiri di tab PDF yang sudah kebuka - jadi aman-gagal.
+        setTimeout(() => {
+          try { jendelaPdf.focus(); jendelaPdf.print(); } catch (e2){ /* abaikan */ }
+        }, 400);
+        pesan = daftar.length + ' label (' + Math.ceil(daftar.length / perHalaman) + ' lembar A4) berhasil dibuat - PDF terbuka di tab baru, siap di-print (Ctrl+P kalau dialog print belum otomatis muncul).';
+      } else {
+        // Tab baru diblokir popup blocker -> fallback ke cara lama (unduh file).
+        doc.save('label_qr_manual_' + stamp + '.pdf');
+        pesan = daftar.length + ' label (' + Math.ceil(daftar.length / perHalaman) + ' lembar A4) berhasil dibuat & diunduh (tab baru diblokir browser - izinkan pop-up untuk halaman ini supaya lain kali PDF-nya langsung terbuka).';
+      }
+      if (diperkecil) pesan += '\n' + diperkecil + ' label fontnya dikecilkan otomatis supaya muat.';
+      if (meluber) pesan += '\n⚠ ' + meluber + ' label teksnya tetap kepanjangan walau font sudah di ukuran minimum: ' + contohMeluber.join(', ') + (meluber > contohMeluber.length ? ', ...' : '') + '. Cek manual di PDF-nya.';
+      tampilkanStatus(statusPdf, pesan, meluber ? 'warn' : 'ok');
+    } catch (e){
+      console.error(e);
+      if (jendelaPdf && !jendelaPdf.closed) jendelaPdf.close();
+      tampilkanStatus(statusPdf, 'Gagal membuat PDF: ' + e.message, 'err');
+    } finally {
+      btnBuatPdf.disabled = daftar.length === 0;
+      btnBuatPdf.textContent = '📄 Buat Label PDF (A4)';
+    }
+  }, 30);
+});
+
+(async () => {
+  namaPerangkat = await deteksiPerangkat();
+  const tersambung = await deteksiJalur();
+  if (tersambung) await muatDaftar(true);
+  inputRak.focus();
+})();
+</script>
+</body>
+</html>

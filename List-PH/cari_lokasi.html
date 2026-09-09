@@ -1,0 +1,866 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cari Lokasi Rak</title>
+<style>
+  :root{
+    --bg:#0f172a; --card:#1e293b; --accent:#22c55e; --text:#f1f5f9; --muted:#94a3b8;
+    --line:#334155; --danger:#ef4444; --warn:#f59e0b;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+       padding:18px;max-width:560px;margin:0 auto}
+  h1{font-size:20px;margin:0 0 4px;text-align:center}
+  p.sub{color:var(--muted);font-size:13px;margin:0 0 18px;text-align:center;line-height:1.5}
+  .nav-dashboard{display:flex;align-items:center;justify-content:center;gap:7px;
+                 width:fit-content;margin:0 auto 14px;padding:8px 18px;
+                 font-size:12.5px;font-weight:600;color:var(--text);text-decoration:none;
+                 background:linear-gradient(145deg,var(--card),#16233a);
+                 border:1px solid var(--line);border-radius:999px;
+                 box-shadow:0 2px 10px rgba(0,0,0,.3);
+                 transition:transform .15s ease,border-color .15s ease,box-shadow .15s ease,background .15s ease}
+  .nav-dashboard .ico{font-size:14px;transition:transform .15s ease}
+  .nav-dashboard:active{transform:scale(.95)}
+  @media (hover:hover){
+    .nav-dashboard:hover{border-color:var(--accent);background:linear-gradient(145deg,#243349,#16233a);
+                          box-shadow:0 4px 16px rgba(34,197,94,.3)}
+    .nav-dashboard:hover .ico{transform:translateX(-3px)}
+  }
+
+  .status{display:flex;align-items:center;justify-content:center;gap:6px;font-size:12px;color:var(--muted);
+          margin-bottom:14px;flex-wrap:wrap}
+  .dot{width:9px;height:9px;border-radius:50%;flex-shrink:0;background:var(--danger);transition:background .25s ease}
+  .dot.checking{background:#94a3b8;animation:dotChecking 1.2s ease-in-out infinite}
+  .dot.local{background:var(--accent);box-shadow:0 0 0 3px rgba(34,197,94,.2)}
+  .dot.broker{background:#38bdf8;animation:dotBroker 2s ease-in-out infinite}
+  .dot.off{background:var(--danger);animation:dotOff 1s ease-in-out infinite}
+  @keyframes dotChecking{0%,100%{opacity:1}50%{opacity:.3}}
+  @keyframes dotBroker{0%,100%{box-shadow:0 0 0 0 rgba(56,189,248,.5)}50%{box-shadow:0 0 0 5px rgba(56,189,248,0)}}
+  @keyframes dotOff{0%,100%{opacity:1}50%{opacity:.25}}
+  #btnJalur{width:auto;margin:0;padding:4px 10px;font-size:11px;font-weight:400;
+            background:#0b1220;color:var(--muted);border:1px solid var(--line);border-radius:8px}
+  #barisAlamat{display:flex;gap:8px;margin-bottom:14px}
+  #barisAlamat input{flex:1;font-size:14px;padding:10px}
+  #btnAlamat{width:auto;margin:0;padding:10px 16px;font-size:14px;background:#334155;color:var(--text)}
+
+  .card{background:var(--card);border-radius:14px;padding:16px;margin-bottom:14px;border:1px solid var(--line)}
+
+  .cari-wrap{position:relative;margin-bottom:6px}
+  input[type=text]{
+    width:100%;padding:14px 40px 14px 14px;border-radius:12px;border:1px solid var(--line);
+    background:#0b1220;color:var(--text);font-size:16px;
+  }
+  input[type=text]:focus{outline:2px solid var(--accent)}
+  .spinner{
+    display:none;position:absolute;right:12px;top:50%;transform:translateY(-50%);
+    width:18px;height:18px;border-radius:50%;border:2px solid var(--line);
+    border-top-color:var(--accent);animation:spin .7s linear infinite;
+  }
+  .spinner.on{display:block}
+  @keyframes spin{to{transform:translateY(-50%) rotate(360deg)}}
+  .hint{font-size:11.5px;color:var(--muted);margin:6px 2px 0}
+
+  .ringkas{font-size:12.5px;color:var(--muted);margin:14px 2px 8px}
+  .ringkas b{color:var(--text)}
+
+  .daftar{display:flex;flex-direction:column;gap:10px}
+  .item{
+    background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 14px;
+  }
+  .item .baris-atas{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:6px}
+  .item .rak{font-size:20px;font-weight:800;color:#4ade80}
+  .item .rak-label{font-size:10px;color:#86efac;text-transform:uppercase;letter-spacing:.04em;display:block;margin-bottom:2px}
+  .badge{display:inline-block;font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:999px;white-space:nowrap}
+  .badge.persis{background:#052e1a;color:#4ade80;border:1px solid #14532d}
+  .badge.awalan{background:#052e1a;color:#4ade80;border:1px solid #14532d}
+  .badge.mengandung{background:#3a2a05;color:#fcd34d;border:1px solid #78350f}
+  .item .detail{font-size:12.5px;line-height:1.9;color:var(--text)}
+  .item .detail .baris{display:flex;justify-content:space-between;gap:10px;border-top:1px solid var(--line);padding:3px 0}
+  .item .detail .baris:first-child{border-top:none}
+  .item .detail .baris span:first-child{color:var(--muted)}
+  .item .detail .baris b{text-align:right;word-break:break-word;max-width:65%}
+  .item .detail mark{background:#365314;color:#eab308;border-radius:3px;padding:0 1px}
+
+  .pesan{font-size:13px;padding:12px;border-radius:8px;line-height:1.5;text-align:center}
+  .pesan.kosong{background:#3a0d0d;color:#fca5a5;border:1px solid #7f1d1d}
+  .pesan.err{background:#3a0d0d;color:#fca5a5;border:1px solid #7f1d1d}
+  .pesan.info{background:#0b1220;color:var(--muted);border:1px solid var(--line)}
+  .pesan.batas{background:#3a2a05;color:#fcd34d;border:1px solid #78350f;text-align:left}
+
+  .item .aksi-item{margin-top:10px;padding-top:10px;border-top:1px solid var(--line);
+                   display:flex;justify-content:flex-end;align-items:center;gap:8px}
+  .btn-ubah-qty{
+    background:transparent;color:var(--accent);border:1px solid #14532d;border-radius:8px;
+    font-size:12.5px;font-weight:600;padding:7px 12px;cursor:pointer;
+  }
+  .btn-ubah-qty:active{background:#052e1a}
+  .qty-stepper{display:flex;align-items:center;gap:6px}
+  .btn-step{
+    width:28px;height:28px;border-radius:8px;border:1px solid #14532d;background:#0b1220;
+    color:#4ade80;font-size:16px;font-weight:700;line-height:1;cursor:pointer;padding:0;
+  }
+  .btn-step:active{background:#052e1a}
+  .btn-step:disabled{opacity:.4;cursor:not-allowed}
+  .pesan-baris{font-size:11.5px;color:#fca5a5;margin-top:6px;display:none;text-align:right}
+  .pesan-baris.show{display:block}
+  .pesan-baris.tengah{text-align:center}
+  tr.flash, .item.flash{animation:flash 1.6s ease}
+  @keyframes flash{ from{background:#052e1a} to{background:transparent} }
+
+  .modal-overlay{
+    position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;
+    align-items:center;justify-content:center;z-index:50;padding:20px;
+  }
+  .modal-overlay.show{display:flex}
+  .modal-box{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:20px;max-width:360px;width:100%}
+  .modal-box h3{margin:0 0 12px;font-size:16px}
+  .modal-info{font-size:13px;line-height:1.9;margin-bottom:6px}
+  .modal-info .baris{display:flex;justify-content:space-between;gap:10px;border-bottom:1px solid var(--line);padding:4px 0}
+  .modal-info .baris span:first-child{color:var(--muted)}
+  .modal-info .baris b{text-align:right;word-break:break-word}
+  .modal-box label{display:block;font-size:12px;color:var(--muted);margin:12px 0 4px}
+  .modal-box input[type=number]{
+    width:100%;padding:11px;border-radius:8px;border:1px solid var(--line);
+    background:#0b1220;color:var(--text);font-size:17px;text-align:center;
+  }
+  .modal-box input[type=number]:focus{outline:2px solid var(--accent);outline-offset:-1px}
+  .mode-toggle{display:flex;gap:6px}
+  .mode-toggle button{
+    flex:1;padding:9px 4px;font-size:12px;font-weight:600;border-radius:8px;border:1px solid var(--line);
+    background:#0b1220;color:var(--muted);cursor:pointer;
+  }
+  .mode-toggle button.active{background:#052e1a;color:#4ade80;border-color:#14532d}
+  .mq-preview{font-size:13px;color:var(--muted);text-align:center;margin-top:10px}
+  .mq-preview b{color:var(--text)}
+  .modal-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:16px}
+  .modal-actions button{padding:9px 16px;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer}
+  .modal-actions button:disabled{opacity:.5;cursor:not-allowed}
+  #mqBatal{background:transparent;color:var(--muted);border:1px solid var(--line)}
+  #mqSimpan{background:var(--accent);color:#03170a}
+  #mqStatus{font-size:12.5px;padding:9px 10px;border-radius:8px;margin-top:10px;display:none;line-height:1.5}
+  #mqStatus.show{display:block}
+  #mqStatus.ok{background:#052e1a;color:#4ade80;border:1px solid #14532d}
+  #mqStatus.err{background:#3a0d0d;color:#fca5a5;border:1px solid #7f1d1d}
+</style>
+</head>
+<body>
+
+<a class="nav-dashboard" href="index.html"><span class="ico">🏠</span> Dashboard</a>
+<h1>🔍 Cari Lokasi Rak</h1>
+<p class="sub">Ketik Part Number E/C atau Part Number Connector Harness (boleh sepenggal) - langsung tampil No Rak-nya.
+Ketemu barisnya? Qty-nya bisa langsung diubah dari sini juga.</p>
+
+<div class="status">
+  <span class="dot checking" id="dot"></span><span id="statusText">Mengecek koneksi...</span>
+  <button id="btnJalur" type="button">Pindah jalur</button>
+</div>
+<div id="barisAlamat" style="display:none">
+  <input type="text" id="inputAlamat" placeholder="Alamat PC, mis. 192.168.137.1" inputmode="decimal">
+  <button id="btnAlamat" type="button">Sambung</button>
+</div>
+
+<div class="card">
+  <div class="cari-wrap">
+    <input type="text" id="inputCari" placeholder="Ketik minimal 3 huruf/angka..." autocomplete="off" autofocus>
+    <span class="spinner" id="spinner"></span>
+  </div>
+  <div class="hint">Dicari sekaligus di kolom Part Number E/C dan Part Number Connector Harness. Makin lengkap yang diketik, makin akurat hasilnya. Tombol − / + di tiap hasil langsung mengubah qty per 1 (sekali klik langsung tersimpan).</div>
+</div>
+
+<div id="hasilWrap"></div>
+
+<div class="modal-overlay" id="modalQty">
+  <div class="modal-box">
+    <h3>✏️ Ubah Qty</h3>
+    <div class="modal-info">
+      <div class="baris"><span>Part No. E/C</span><b id="mqPartEc">-</b></div>
+      <div class="baris"><span>No Rak</span><b id="mqRak">-</b></div>
+      <div class="baris">
+        <span>Qty saat ini</span>
+        <span class="qty-stepper">
+          <button type="button" class="btn-step" id="mqStepMinus" title="Kurangi 1">−</button>
+          <b id="mqQtyLama">-</b>
+          <button type="button" class="btn-step" id="mqStepPlus" title="Tambah 1">+</button>
+        </span>
+      </div>
+    </div>
+    <div class="pesan-baris tengah" id="mqPesanStep"></div>
+
+    <label>Atau ubah jumlah tertentu</label>
+    <div class="mode-toggle" id="mqModeToggle">
+      <button type="button" class="mq-mode active" data-mode="set">Ganti jadi</button>
+      <button type="button" class="mq-mode" data-mode="add">+ Tambah</button>
+      <button type="button" class="mq-mode" data-mode="sub">− Kurangi</button>
+    </div>
+
+    <label>Qty</label>
+    <input type="number" id="mqQtyInput" min="0" step="1" inputmode="numeric" value="0">
+    <div class="mq-preview" id="mqPreview"></div>
+
+    <div id="mqStatus"></div>
+
+    <div class="modal-actions">
+      <button id="mqBatal" type="button">Batal</button>
+      <button id="mqSimpan" type="button">Simpan</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const dot = document.getElementById('dot');
+const statusText = document.getElementById('statusText');
+// Satu titik kebenaran untuk warna/animasi indikator koneksi - lihat
+// penjelasan lengkap di scan.html (file sumber pola ini).
+function setDotState(state){
+  dot.className = 'dot ' + state;
+}
+const barisAlamat = document.getElementById('barisAlamat');
+const inputAlamat = document.getElementById('inputAlamat');
+const btnAlamat = document.getElementById('btnAlamat');
+const inputCari = document.getElementById('inputCari');
+const spinner = document.getElementById('spinner');
+const hasilWrap = document.getElementById('hasilWrap');
+
+const MIN_KARAKTER = 3;
+
+// ---------- Deteksi jalur ke PC - SAMA persis pola dengan scan.html ----------
+// LOKAL  : HP -> langsung ke PC lewat WiFi/hotspot yang sama (instan, tanpa internet).
+// BROKER : HP -> internet -> broker MQTT -> PC. Dipakai kalau HP & PC beda jaringan
+//          (mis. cari lokasi rak dari luar kantor/gudang). Otomatis fallback ke
+//          sini kalau jalur lokal tidak terjangkau.
+const btnJalur = document.getElementById('btnJalur');
+let transport = 'mqtt';
+let apiBase = '';
+const PORT_HTTP_PC = 5001;
+
+function setStatus(tersambung, ket){
+  setDotState(tersambung ? 'local' : 'off');
+  statusText.textContent = ket;
+}
+
+function setTransport(mode, alasan){
+  transport = mode;
+  if (mode === 'lokal'){
+    setDotState('local');
+    statusText.textContent = 'Jalur LOKAL — langsung ke PC' + (apiBase ? ' (' + apiBase.replace('http://','') + ')' : '');
+    btnJalur.textContent = 'Pindah ke broker';
+    barisAlamat.style.display = 'none';
+  } else {
+    setDotState('checking');
+    statusText.textContent = 'Jalur BROKER — ' + (alasan || 'lewat internet');
+    btnJalur.textContent = 'Coba jalur lokal';
+    barisAlamat.style.display = 'flex';
+    loadMqttLib();
+  }
+}
+
+// Pembungkus fetch dengan batas waktu (AbortController) - supaya kalau PC/Excel
+// macet (mis. ada sel dalam mode edit di Excel), permintaan GAGAL JELAS dalam
+// waktu wajar, bukan bikin tulisan status menggantung tanpa akhir kalau
+// backend-nya sendiri tidak pernah sempat kembali.
+async function fetchDenganBatasWaktu(url, opt, ms){
+  ms = ms || 15000;
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), ms);
+  try{
+    return await fetch(url, Object.assign({}, opt, { signal: ctrl.signal }));
+  }catch(e){
+    if (e.name === 'AbortError'){
+      throw new Error('PC tidak merespons dalam ' + Math.round(ms / 1000) + ' detik '
+        + '(kemungkinan Excel macet - ada sel dalam mode edit). Coba lagi.');
+    }
+    throw e;
+  }finally{
+    clearTimeout(t);
+  }
+}
+
+async function cobaHealth(base){
+  try{
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 2500);
+    const r = await fetch(base + '/api/health', { cache: 'no-store', signal: ctrl.signal });
+    clearTimeout(t);
+    return r.ok;
+  }catch(e){ return false; }
+}
+
+async function deteksiJalur(){
+  setDotState('checking');
+  statusText.textContent = 'Mengecek koneksi ke PC...';
+
+  if (await cobaHealth('')){ apiBase = ''; setTransport('lokal'); return; }
+  const simpan = (localStorage.getItem('alamatPC') || '').trim();
+  if (simpan){
+    const base = 'http://' + simpan + ':' + PORT_HTTP_PC;
+    if (await cobaHealth(base)){ apiBase = base; setTransport('lokal'); return; }
+  }
+  apiBase = '';
+  setTransport('mqtt', simpan ? 'PC tidak menjawab' : 'alamat PC belum diisi');
+}
+
+inputAlamat.value = localStorage.getItem('alamatPC') || '';
+btnAlamat.addEventListener('click', async () => {
+  const v = inputAlamat.value.trim().replace(/^https?:\/\//, '').replace(/[:/].*$/, '');
+  if (!v) return;
+  try{ localStorage.setItem('alamatPC', v); }catch(e){}
+  btnAlamat.textContent = 'Mencoba...';
+  const base = 'http://' + v + ':' + PORT_HTTP_PC;
+  if (await cobaHealth(base)){
+    apiBase = base;
+    setTransport('lokal');
+  } else {
+    setStatus(false, 'PC ' + v + ' tidak menjawab di port ' + PORT_HTTP_PC);
+  }
+  btnAlamat.textContent = 'Sambung';
+});
+btnJalur.addEventListener('click', () => {
+  if (transport === 'lokal') setTransport('mqtt', 'dipilih manual');
+  else deteksiJalur();
+});
+
+function loadScript(src, onload, onerror){
+  const s = document.createElement('script');
+  s.src = src;
+  s.onload = onload;
+  s.onerror = onerror;
+  document.head.appendChild(s);
+}
+
+// ---------- Jalur BROKER (MQTT) - HARUS SAMA PERSIS dengan BROKER_HOST/PORT/
+// TOPIC di mqtt_subscriber.py (PC), dan sama juga dengan scan.html supaya
+// satu instance mqtt_subscriber.py melayani semua halaman sekaligus. ----------
+const MQTT_BROKER_URL = 'wss://broker.emqx.io:8084/mqtt';
+const MQTT_TOPIC = 'poshheader/qrscan/883f4243';   // topic SAVE (Ubah Qty / +1-1) - permintaan langsung ke sini
+const T_CARI_REQ = MQTT_TOPIC + '/cari/req';
+const T_CARI_RES = MQTT_TOPIC + '/cari/res';
+const T_SAVE_RES = MQTT_TOPIC + '/save/res';
+
+let mqttClient = null;
+let mqttEverConnected = false;
+
+function loadMqttLib(){
+  if (typeof mqtt !== 'undefined'){ connectMqtt(); return; }
+  loadScript('mqtt.lib.js', connectMqtt, () => {
+    loadScript('https://cdn.jsdelivr.net/npm/mqtt@5.15.2/dist/mqtt.min.js', connectMqtt, () => {
+      setDotState('off');
+      statusText.textContent = '⚠️ Gagal memuat library MQTT (lokal & CDN)';
+    });
+  });
+}
+
+function connectMqtt(){
+  if (mqttClient) return;   // sudah pernah disiapkan (mis. dipanggil ulang karena pindah jalur bolak-balik)
+  if (typeof mqtt === 'undefined'){
+    statusText.textContent = '⚠️ Gagal memuat library MQTT';
+    return;
+  }
+  setDotState('checking');
+  statusText.textContent = 'Menghubungkan ke broker MQTT...';
+  try{
+    mqttClient = mqtt.connect(MQTT_BROKER_URL, {
+      clientId: 'cari-lokasi-' + Math.random().toString(16).slice(2, 10),
+      reconnectPeriod: 3000,
+      connectTimeout: 8000,
+      clean: true,
+    });
+  }catch(err){
+    statusText.textContent = '⚠️ Gagal inisialisasi MQTT: ' + err.message;
+    return;
+  }
+
+  mqttClient.on('connect', () => {
+    mqttEverConnected = true;
+    if (transport === 'mqtt'){ setDotState('broker'); statusText.textContent = 'Terhubung ke broker MQTT'; }
+    mqttClient.subscribe([T_CARI_RES, T_SAVE_RES], { qos: 1 });
+  });
+  mqttClient.on('message', (topic, message) => {
+    let data;
+    try{ data = JSON.parse(message.toString()); }catch(e){ return; }
+    selesaikanRespons(data);
+  });
+  mqttClient.on('reconnect', () => {
+    if (transport === 'mqtt'){ setDotState('checking'); statusText.textContent = 'Menyambung ulang ke broker...'; }
+  });
+  mqttClient.on('close', () => {
+    if (transport === 'mqtt'){ setDotState('off'); statusText.textContent = 'Terputus dari broker'; }
+  });
+  mqttClient.on('error', (err) => {
+    if (transport === 'mqtt'){
+      setDotState('off');
+      statusText.textContent = 'Error MQTT: ' + (err && err.message ? err.message : err);
+    }
+  });
+
+  setTimeout(() => {
+    if (!mqttEverConnected && transport === 'mqtt'){
+      statusText.textContent = '⚠️ Belum tersambung ke broker setelah 10 detik (jaringan mungkin memblokir port 8084)';
+    }
+  }, 10000);
+}
+
+// ---- Pola request/response di atas MQTT: publish ke topic .../req dengan
+// reqId acak, PC (mqtt_subscriber.py) balas ke topic .../res dengan reqId
+// yang sama - dicocokkan di sini lewat Map (satu handler 'message' melayani
+// semua jenis permintaan: cari, ubah qty/stepper, dst - sekaligus). ----
+const menungguRespons = new Map();   // reqId -> { resolve, reject, timer }
+
+function selesaikanRespons(data){
+  const p = menungguRespons.get(data.reqId);
+  if (!p) return;   // bukan jawaban punya kita (reqId lama/basi) - abaikan
+  menungguRespons.delete(data.reqId);
+  clearTimeout(p.timer);
+  if (data.ok) p.resolve(data); else p.reject(new Error(data.error || 'tidak diketahui'));
+}
+
+function mqttRequest(topicReq, payload, timeoutMs){
+  timeoutMs = timeoutMs || 8000;
+  return new Promise((resolve, reject) => {
+    if (!mqttClient || !mqttClient.connected){
+      reject(new Error('Belum tersambung ke broker MQTT.'));
+      return;
+    }
+    const reqId = 'r' + Date.now() + Math.random().toString(16).slice(2, 6);
+    const timer = setTimeout(() => {
+      menungguRespons.delete(reqId);
+      reject(new Error('Tidak ada jawaban dari PC dalam ' + (timeoutMs/1000) + ' detik. Pastikan mqtt_subscriber.py sedang jalan.'));
+    }, timeoutMs);
+    menungguRespons.set(reqId, { resolve, reject, timer });
+    mqttClient.publish(topicReq, JSON.stringify(Object.assign({ reqId }, payload)), { qos: 1 }, (err) => {
+      if (err){
+        clearTimeout(timer);
+        menungguRespons.delete(reqId);
+        reject(err);
+      }
+    });
+  });
+}
+
+deteksiJalur();
+
+// ---------- Pencarian bebas (live, debounce) ----------
+function escapeHtml(s){
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+// Tandai bagian yang cocok dengan kata kunci (highlight) - biar kelihatan
+// kenapa baris itu muncul, karena pencocokan longgar (substring).
+function highlight(nilai, kunci){
+  const teks = escapeHtml(nilai || '-');
+  if (!nilai || !kunci) return teks;
+  const idx = nilai.toUpperCase().indexOf(kunci.toUpperCase());
+  if (idx < 0) return teks;
+  const before = escapeHtml(nilai.slice(0, idx));
+  const match = escapeHtml(nilai.slice(idx, idx + kunci.length));
+  const after = escapeHtml(nilai.slice(idx + kunci.length));
+  return `${before}<mark>${match}</mark>${after}`;
+}
+
+function pesanHtml(pesan, tipe){
+  return `<div class="pesan ${tipe}">${pesan}</div>`;
+}
+
+function labelBadge(jenis){
+  if (jenis === 'persis') return '<span class="badge persis">persis</span>';
+  if (jenis === 'awalan') return '<span class="badge awalan">awalan cocok</span>';
+  return '<span class="badge mengandung">mengandung</span>';
+}
+
+function jenisItem(it, kunci){
+  const ec = (it.partEc || '').toUpperCase();
+  const hn = (it.partHarness || '').toUpperCase();
+  const k = kunci.toUpperCase();
+  const cocokDi = it.cocokDi || [];
+  let terbaik = 'mengandung';
+  cocokDi.forEach(kolom => {
+    const nilai = kolom === 'partEc' ? ec : hn;
+    if (nilai === k) terbaik = 'persis';
+    else if (terbaik !== 'persis' && nilai.startsWith(k)) terbaik = 'awalan';
+  });
+  return terbaik;
+}
+
+function renderItem(it, kunci){
+  const jenis = jenisItem(it, kunci);
+  return `
+    <div class="item" data-row="${it.row}">
+      <div class="baris-atas">
+        <div>
+          <span class="rak-label">No Rak / Lokasi Rak</span>
+          <span class="rak">${escapeHtml(it.lokasi || '-')}</span>
+        </div>
+        ${labelBadge(jenis)}
+      </div>
+      <div class="detail">
+        <div class="baris"><span>Part No. E/C</span><b>${highlight(it.partEc, kunci)}</b></div>
+        <div class="baris"><span>Connector Harness</span><b>${highlight(it.partHarness, kunci)}</b></div>
+        <div class="baris"><span>Klasifikasi</span><b>${escapeHtml(it.klasifikasi || '-')}</b></div>
+        <div class="baris"><span>Maker</span><b>${escapeHtml(it.maker || '-')}</b></div>
+        <div class="baris">
+          <span>Qty tercatat</span>
+          <span class="qty-stepper">
+            <button type="button" class="btn-step" data-row="${it.row}" data-arah="-1" title="Kurangi 1">−</button>
+            <b id="qty-baris-${it.row}">${escapeHtml(String(it.qty ?? '-'))}</b>
+            <button type="button" class="btn-step" data-row="${it.row}" data-arah="1" title="Tambah 1">+</button>
+          </span>
+        </div>
+        <div class="baris"><span>Baris List-PH</span><b>${escapeHtml(String(it.row))}</b></div>
+      </div>
+      <div class="pesan-baris" id="pesan-baris-${it.row}"></div>
+      <div class="aksi-item">
+        <button type="button" class="btn-ubah-qty" data-row="${it.row}">✏️ Ubah Qty</button>
+      </div>
+    </div>`;
+}
+
+// Disimpan supaya modal Ubah Qty bisa cari detail item by row, dan supaya
+// daftar hasil bisa digambar ulang (dengan qty terbaru) tanpa cari ulang ke server.
+let hasilTerakhir = null;   // { data: {...respons /api/cari}, kunci: '...' }
+
+function renderHasil(data, kunci){
+  hasilTerakhir = { data, kunci };
+  if (data.found === 0){
+    hasilWrap.innerHTML = pesanHtml(`✖ Tidak ada Part Number E/C atau Connector Harness yang mengandung "${escapeHtml(kunci)}".`, 'kosong');
+    return;
+  }
+  let atas = `<div class="ringkas">Ketemu <b>${data.found}</b> baris cocok` +
+    (data.dibatasi ? ` - ditampilkan ${data.items.length} teratas` : '') + `:</div>`;
+  if (data.dibatasi){
+    atas += pesanHtml('Hasil terlalu banyak, hanya sebagian ditampilkan. Ketik lebih lengkap supaya lebih akurat &amp; ringkas.', 'batas');
+  }
+  const daftar = data.items.map(it => renderItem(it, kunci)).join('');
+  hasilWrap.innerHTML = atas + `<div class="daftar">${daftar}</div>`;
+}
+
+let timerDebounce = null;
+let permintaanTerakhir = 0;
+
+async function jalankanCari(kunci){
+  if (transport === 'lokal' && !apiBase && !(await cobaHealth(''))){
+    hasilWrap.innerHTML = pesanHtml('Belum tersambung ke PC. Isi "Alamat PC" di atas dulu.', 'err');
+    spinner.classList.remove('on');
+    return;
+  }
+  const idKu = ++permintaanTerakhir;
+  try{
+    let data;
+    if (transport === 'lokal'){
+      const r = await fetchDenganBatasWaktu(apiBase + '/api/cari', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ kataKunci: kunci })
+      });
+      data = await r.json();
+    } else {
+      if (!mqttClient || !mqttClient.connected){
+        if (idKu !== permintaanTerakhir) return;
+        hasilWrap.innerHTML = pesanHtml('Belum tersambung ke broker MQTT. Tunggu status di atas jadi hijau.', 'err');
+        return;
+      }
+      data = await mqttRequest(T_CARI_REQ, { kataKunci: kunci });
+    }
+    if (idKu !== permintaanTerakhir) return; // ada ketikan lebih baru, buang hasil basi ini
+    if (!data.ok){
+      hasilWrap.innerHTML = pesanHtml('Gagal mencari: ' + escapeHtml(data.error || 'tidak diketahui'), 'err');
+      return;
+    }
+    renderHasil(data, kunci);
+  }catch(e){
+    if (idKu !== permintaanTerakhir) return;
+    hasilWrap.innerHTML = pesanHtml('Gagal mencari: ' + escapeHtml(e.message), 'err');
+  }finally{
+    if (idKu === permintaanTerakhir) spinner.classList.remove('on');
+  }
+}
+
+function onKetik(){
+  const kunci = inputCari.value.trim();
+  clearTimeout(timerDebounce);
+  spinner.classList.remove('on');
+
+  if (kunci.length === 0){
+    permintaanTerakhir++; // batalkan hasil pencarian yang masih tertunda
+    hasilWrap.innerHTML = '';
+    return;
+  }
+  if (kunci.length < MIN_KARAKTER){
+    permintaanTerakhir++;
+    hasilWrap.innerHTML = pesanHtml(`Ketik ${MIN_KARAKTER - kunci.length} huruf/angka lagi (minimal ${MIN_KARAKTER}).`, 'info');
+    return;
+  }
+
+  spinner.classList.add('on');
+  timerDebounce = setTimeout(() => jalankanCari(kunci), 350);
+}
+
+inputCari.addEventListener('input', onKetik);
+inputCari.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter'){
+    e.preventDefault();
+    clearTimeout(timerDebounce);
+    const kunci = inputCari.value.trim();
+    if (kunci.length >= MIN_KARAKTER){
+      spinner.classList.add('on');
+      jalankanCari(kunci);
+    }
+  }
+});
+
+// =====================================================================
+//  MODAL UBAH QTY - dipanggil dari tombol di tiap hasil pencarian. Menulis
+//  lewat /api/scan (SAMA persis endpoint yang dipakai scan.html), dengan
+//  `row` + `expectPartEc` supaya update-nya aman: apply_scan() memverifikasi
+//  ulang baris itu masih berisi part yang sama sebelum menimpa qty-nya -
+//  jadi walau ketemunya lewat pencarian LONGGAR (substring, cari_bebas),
+//  penulisannya sendiri tetap seketat jalur scan biasa (row+cek isi baris).
+// =====================================================================
+const modalQty = document.getElementById('modalQty');
+const mqPartEc = document.getElementById('mqPartEc');
+const mqRak = document.getElementById('mqRak');
+const mqQtyLama = document.getElementById('mqQtyLama');
+const mqStepMinus = document.getElementById('mqStepMinus');
+const mqStepPlus = document.getElementById('mqStepPlus');
+const mqPesanStep = document.getElementById('mqPesanStep');
+const mqModeToggle = document.getElementById('mqModeToggle');
+const mqQtyInput = document.getElementById('mqQtyInput');
+const mqPreview = document.getElementById('mqPreview');
+const mqStatus = document.getElementById('mqStatus');
+const mqBatal = document.getElementById('mqBatal');
+const mqSimpan = document.getElementById('mqSimpan');
+
+let itemUbah = null;   // item yang sedang diedit di modal
+let mqMode = 'set';
+
+function cariItemByRow(row){
+  if (!hasilTerakhir) return null;
+  return hasilTerakhir.data.items.find(it => it.row === row) || null;
+}
+
+function tampilkanStatusMq(pesan, tipe){
+  mqStatus.textContent = pesan;
+  mqStatus.className = tipe ? 'show ' + tipe : '';
+}
+
+function updatePreviewMq(){
+  const qtyLama = Number(itemUbah && itemUbah.qty) || 0;
+  const q = Number(mqQtyInput.value);
+  if (Number.isNaN(q)){
+    mqPreview.textContent = '';
+    return;
+  }
+  let hasil = q;
+  if (mqMode === 'add') hasil = qtyLama + q;
+  else if (mqMode === 'sub') hasil = qtyLama - q;
+  mqPreview.innerHTML = qtyLama + ' &rarr; <b>' + hasil + '</b>';
+}
+
+function bukaModalUbahQty(row){
+  const it = cariItemByRow(row);
+  if (!it) return;
+  itemUbah = it;
+  mqMode = 'set';
+  mqModeToggle.querySelectorAll('.mq-mode').forEach(b => b.classList.toggle('active', b.dataset.mode === 'set'));
+
+  mqPartEc.textContent = it.partEc || '-';
+  mqRak.textContent = it.lokasi || '-';
+  mqQtyLama.textContent = it.qty ?? '-';
+  mqQtyInput.value = Number(it.qty) || 0;
+  tampilkanStatusMq('', '');
+  tampilkanPesanStepModal('');
+  mqStepMinus.disabled = sedangStep.has(row);
+  mqStepPlus.disabled = sedangStep.has(row);
+  mqSimpan.disabled = false;
+  mqSimpan.textContent = 'Simpan';
+  updatePreviewMq();
+  modalQty.classList.add('show');
+  mqQtyInput.focus();
+  mqQtyInput.select();
+}
+
+function tutupModalQty(){
+  modalQty.classList.remove('show');
+  itemUbah = null;
+}
+
+hasilWrap.addEventListener('click', (e) => {
+  const btnUbah = e.target.closest('.btn-ubah-qty');
+  if (btnUbah){ bukaModalUbahQty(Number(btnUbah.dataset.row)); return; }
+  const btnStep = e.target.closest('.btn-step');
+  if (btnStep){ ubahQtyCepat(Number(btnStep.dataset.row), Number(btnStep.dataset.arah)); return; }
+});
+
+// ---------------------------------------------------------------
+//  STEPPER +1 / -1 - kelipatan 1, sekali klik langsung tersimpan (tanpa
+//  buka modal/ketik apa pun). Dipakai baik oleh tombol di kartu hasil
+//  MAUPUN tombol ±1 di dalam modal "Ubah Qty" (satu fungsi, satu kunci
+//  per baris) - jadi kalau baris yang sama kebetulan bisa diklik dari
+//  dua tempat sekaligus, tetap tidak bisa nyasar jadi dua permintaan.
+//  Untuk perubahan jumlah tertentu/lebih besar, tetap pakai bagian
+//  "Ganti jadi / Tambah / Kurangi" + Simpan di bawahnya pada modal.
+// ---------------------------------------------------------------
+const sedangStep = new Set();   // baris (row) yang requestnya masih berjalan
+
+function tampilkanPesanBaris(row, pesan){
+  const el = document.getElementById('pesan-baris-' + row);
+  if (!el) return;
+  el.textContent = pesan;
+  el.classList.toggle('show', !!pesan);
+  if (pesan) setTimeout(() => { el.classList.remove('show'); }, 3500);
+}
+
+function tampilkanPesanStepModal(pesan){
+  mqPesanStep.textContent = pesan;
+  mqPesanStep.classList.toggle('show', !!pesan);
+  if (pesan) setTimeout(() => { mqPesanStep.classList.remove('show'); }, 3500);
+}
+
+// Dipakai bareng oleh stepper +1/-1 DAN modal "Ubah Qty" - satu jalur kirim ke
+// server (lewat jalur lokal ATAU broker, tergantung `transport` saat ini),
+// jadi cara kedua fitur ini menyimpan ke Excel PERSIS sama, cuma beda payload.
+async function kirimScan(payload){
+  if (transport === 'lokal'){
+    if (!apiBase && !(await cobaHealth(''))) throw new Error('Belum tersambung ke PC.');
+    const r = await fetchDenganBatasWaktu(apiBase + '/api/scan', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await r.json();
+    if (!data.ok) throw new Error(data.error || 'gagal menyimpan');
+    return data;
+  }
+  if (!mqttClient || !mqttClient.connected) throw new Error('Belum tersambung ke broker MQTT.');
+  return mqttRequest(MQTT_TOPIC, payload);   // reject otomatis kalau ok:false (lihat selesaikanRespons)
+}
+
+async function ubahQtyCepat(row, arah){
+  // arah: 1 = tambah, -1 = kurangi
+  if (sedangStep.has(row)) return;
+  const it = cariItemByRow(row);
+  if (!it) return;
+
+  // KUNCI DULU secara SINKRON sebelum apa pun yang async (termasuk cek koneksi
+  // di bawah) - supaya klik ganda yang cepat (dua event sempat masuk sebelum
+  // baris pertama selesai) tidak ikut lolos jadi dua permintaan +1/-1 sekaligus.
+  sedangStep.add(row);
+  const tombolBaris = hasilWrap.querySelectorAll('.item[data-row="' + row + '"] .btn-step');
+  tombolBaris.forEach(b => b.disabled = true);
+  tampilkanPesanBaris(row, '');
+  const modalIkut = !!(itemUbah && itemUbah.row === row);   // modal sedang buka utk baris yang sama?
+  if (modalIkut){
+    mqStepMinus.disabled = true;
+    mqStepPlus.disabled = true;
+    tampilkanPesanStepModal('');
+  }
+
+  try{
+    const data = await kirimScan({
+      kode: it.partEc,
+      row: it.row,
+      expectPartEc: it.partEc,
+      mode: arah > 0 ? 'add' : 'sub',
+      qty: 1,
+      perangkat: 'Cari Lokasi (+1/-1 cepat)',
+    });
+
+    it.qty = data.qtyBaru;   // itemUbah adalah objek yang sama persis (lihat cariItemByRow) - ikut sinkron otomatis
+    const elQty = document.getElementById('qty-baris-' + row);
+    if (elQty) elQty.textContent = data.qtyBaru;
+    const elItem = hasilWrap.querySelector('.item[data-row="' + row + '"]');
+    if (elItem){
+      elItem.classList.remove('flash');
+      void elItem.offsetWidth;   // restart animasi kalau di-klik berturut-turut
+      elItem.classList.add('flash');
+    }
+    if (modalIkut){
+      mqQtyLama.textContent = data.qtyBaru;
+      // Mode "Ganti jadi" berarti field Qty = target ABSOLUT, defaultnya = qty
+      // saat ini - jadi kalau qty berubah lewat tombol +/- di modal, field ini
+      // harus ikut disesuaikan juga. Kalau tidak, Simpan sesudahnya akan
+      // menimpa balik ke angka lama yang sudah tidak sesuai (bug yang dilaporkan).
+      // Mode Tambah/Kurangi tidak disentuh karena field-nya berarti JUMLAH
+      // perubahan (delta), bukan nilai qty itu sendiri.
+      if (mqMode === 'set') mqQtyInput.value = data.qtyBaru;
+      updatePreviewMq();
+    }
+  }catch(e){
+    const pesan = 'Gagal ' + (arah > 0 ? 'menambah' : 'mengurangi') + ': ' + e.message;
+    tampilkanPesanBaris(row, pesan);
+    if (modalIkut) tampilkanPesanStepModal(pesan);
+  }finally{
+    sedangStep.delete(row);
+    tombolBaris.forEach(b => b.disabled = false);
+    if (modalIkut){
+      mqStepMinus.disabled = false;
+      mqStepPlus.disabled = false;
+    }
+  }
+}
+
+mqModeToggle.querySelectorAll('.mq-mode').forEach(btn => {
+  btn.addEventListener('click', () => {
+    mqModeToggle.querySelectorAll('.mq-mode').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    mqMode = btn.dataset.mode;
+    // Pindah ke "Ganti jadi" -> field Qty berarti target absolut, jadi disegarkan
+    // ke qty TERKINI (bisa saja sudah berubah lewat tombol +/- tadi) supaya tidak
+    // kebawa angka delta bekas mode Tambah/Kurangi yang tidak nyambung lagi.
+    if (mqMode === 'set' && itemUbah) mqQtyInput.value = Number(itemUbah.qty) || 0;
+    updatePreviewMq();
+  });
+});
+mqStepMinus.addEventListener('click', () => { if (itemUbah) ubahQtyCepat(itemUbah.row, -1); });
+mqStepPlus.addEventListener('click', () => { if (itemUbah) ubahQtyCepat(itemUbah.row, 1); });
+mqQtyInput.addEventListener('input', updatePreviewMq);
+mqBatal.addEventListener('click', tutupModalQty);
+modalQty.addEventListener('click', (e) => { if (e.target === modalQty) tutupModalQty(); });
+
+mqSimpan.addEventListener('click', async () => {
+  if (!itemUbah) return;
+  if (mqSimpan.disabled) return;   // sudah ada permintaan berjalan - abaikan klik susulan
+  const qtyInput = mqQtyInput.value;
+  if (qtyInput === '' || Number.isNaN(Number(qtyInput))){
+    tampilkanStatusMq('Qty wajib diisi angka.', 'err');
+    return;
+  }
+
+  // Kunci SINKRON dulu sebelum apa pun yang async (lihat alasannya di stepQty()).
+  mqSimpan.disabled = true;
+  mqSimpan.textContent = 'Menyimpan...';
+  tampilkanStatusMq('', '');
+
+  try{
+    const data = await kirimScan({
+      kode: itemUbah.partEc,
+      row: itemUbah.row,
+      expectPartEc: itemUbah.partEc,   // dicek ulang di server: baris ini masih part yang sama?
+      mode: mqMode,
+      qty: qtyInput,
+      perangkat: 'Cari Lokasi (Ubah Qty)',
+    });
+
+    // Perbarui qty di hasil pencarian yang sedang tampil, tanpa perlu cari ulang.
+    itemUbah.qty = data.qtyBaru;
+    const elQty = document.getElementById('qty-baris-' + itemUbah.row);
+    if (elQty) elQty.textContent = data.qtyBaru;
+    const elItem = hasilWrap.querySelector('.item[data-row="' + itemUbah.row + '"]');
+    if (elItem){
+      elItem.classList.remove('flash');
+      void elItem.offsetWidth;   // restart animasi kalau berturut-turut diubah
+      elItem.classList.add('flash');
+    }
+
+    tampilkanStatusMq(`✓ Qty diubah jadi ${data.qtyBaru}.`, 'ok');
+    setTimeout(tutupModalQty, 900);
+  }catch(e){
+    tampilkanStatusMq('Gagal menyimpan: ' + e.message, 'err');
+  }finally{
+    mqSimpan.disabled = false;
+    mqSimpan.textContent = 'Simpan';
+  }
+});
+</script>
+</body>
+</html>

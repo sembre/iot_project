@@ -1,0 +1,46 @@
+# =====================================================================
+#  PENGAMAN BERKAS PRIVAT  -  repo ini PUBLIK
+# =====================================================================
+# Berkas kerja yang sebenarnya (server.py, mqtt_subscriber.py, dan
+# "list poshheader.xlsm") tinggal di D:\List-PH yang TERPISAH dan tidak
+# punya remote GitHub, jadi seharusnya tidak akan pernah sampai ke sini.
+#
+# Daftar di bawah adalah jaring pengaman KEDUA: kalau suatu saat ada
+# berkas yang tidak sengaja tersalin ke dalam folder ini (salah drag,
+# salah tujuan simpan, salin sefolder), git menolak menyertakannya
+# sehingga tidak ikut ter-push dan tidak tercatat di riwayat publik.
+#
+# Riwayat git itu permanen: sekali sebuah berkas ikut ter-push,
+# menghapusnya di commit berikutnya TIDAK menghilangkannya - dia tetap
+# bisa dibuka lewat commit lama. Itulah kenapa pencegahan di depan jauh
+# lebih penting daripada perbaikan belakangan.
+
+# ---------- Data & berkas Excel ----------
+*.xlsm
+*.xlsx
+*.xls
+~$*
+*.tmp
+
+# Catatan pemakaian / hasil ekspor (bisa berisi data operasional)
+*.csv
+
+# ---------- Skrip server & berkas kerja Python ----------
+# Hapus baris *.py kalau suatu saat kamu memang ingin menerbitkan
+# skrip Python-mu di repo ini.
+*.py
+__pycache__/
+*.pyc
+
+# ---------- Kredensial & kunci ----------
+.env
+*.env
+*.pem
+*.key
+*.crt
+*.p12
+
+# ---------- Sampah sistem ----------
+Thumbs.db
+desktop.ini
+.DS_Store
