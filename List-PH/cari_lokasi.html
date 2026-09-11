@@ -90,7 +90,30 @@
   .pesan.batas{background:#3a2a05;color:#fcd34d;border:1px solid #78350f;text-align:left}
 
   .item .aksi-item{margin-top:10px;padding-top:10px;border-top:1px solid var(--line);
-                   display:flex;justify-content:flex-end;align-items:center;gap:8px}
+                   display:flex;justify-content:flex-end;align-items:center;gap:8px;flex-wrap:wrap}
+
+  /* Tombol "Lihat gambar" - satu untuk Part No. E/C, satu untuk Connector
+     Harness. Sengaja dibuat <a target="_blank">, bukan <button>+JS: dengan
+     begitu bisa ditahan-lama untuk "buka di tab baru", disalin alamatnya,
+     dan tetap jalan walau JS-nya bermasalah. */
+  .btn-gambar{
+    display:inline-flex;align-items:center;gap:6px;max-width:100%;
+    background:transparent;color:#93c5fd;border:1px solid #1e3a8a;border-radius:8px;
+    font-size:12.5px;font-weight:600;padding:7px 12px;cursor:pointer;
+    text-decoration:none;font-family:inherit;
+  }
+  .btn-gambar:active{background:#0b1e3d}
+  .btn-gambar .kode{
+    /* Nomor part bisa panjang - potong dengan elipsis supaya tombol tidak
+       melar dan menendang tombol Ubah Qty ke baris lain. */
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:170px;
+  }
+  .btn-gambar .ikon{flex-shrink:0}
+  @media (max-width:430px){
+    .item .aksi-item{justify-content:stretch}
+    .btn-gambar,.btn-ubah-qty{flex:1 1 100%;justify-content:center;text-align:center}
+    .btn-gambar .kode{max-width:none}
+  }
   .btn-ubah-qty{
     background:transparent;color:var(--accent);border:1px solid #14532d;border-radius:8px;
     font-size:12.5px;font-weight:600;padding:7px 12px;cursor:pointer;
@@ -482,6 +505,37 @@ function jenisItem(it, kunci){
   return terbaik;
 }
 
+// =====================================================================
+//  TOMBOL "LIHAT GAMBAR"
+// =====================================================================
+// Mesin pencari gambar yang dipakai. Ganti ke 'bing' kalau lebih disukai -
+// cukup satu baris ini, tidak ada tempat lain yang perlu diubah.
+const MESIN_GAMBAR = 'google';   // 'google' | 'bing'
+
+function alamatGambar(kode, maker){
+  // Nama maker ikut disertakan kalau ada: nomor part sering dipakai ulang
+  // oleh pabrikan berbeda, jadi tanpa maker hasilnya bisa barang lain sama
+  // sekali. Yang TAMPIL di tombol tetap kodenya saja supaya tombol ringkas.
+  const query = [kode, maker].map(s => (s || '').trim()).filter(Boolean).join(' ');
+  return MESIN_GAMBAR === 'bing'
+    ? 'https://www.bing.com/images/search?q=' + encodeURIComponent(query)
+    : 'https://www.google.com/search?tbm=isch&q=' + encodeURIComponent(query);
+}
+
+function tombolGambar(kode, maker, labelKolom){
+  const k = (kode || '').trim();
+  if (!k) return '';   // tidak ada nomornya -> tombolnya tidak usah ada sama sekali
+  // rel="noopener noreferrer": tab yang dibuka tidak bisa menyentuh halaman ini
+  // lewat window.opener, dan alamat halaman ini tidak ikut terkirim ke mesin
+  // pencari sebagai referrer.
+  return `<a class="btn-gambar" target="_blank" rel="noopener noreferrer"
+             href="${escapeHtml(alamatGambar(k, maker))}"
+             title="Cari gambar ${escapeHtml(labelKolom)}: ${escapeHtml(k)}">
+            <span class="ikon">🖼</span>
+            <span class="kode">Lihat gambar ${escapeHtml(k)}</span>
+          </a>`;
+}
+
 function renderItem(it, kunci){
   const jenis = jenisItem(it, kunci);
   return `
@@ -510,6 +564,8 @@ function renderItem(it, kunci){
       </div>
       <div class="pesan-baris" id="pesan-baris-${it.row}"></div>
       <div class="aksi-item">
+        ${tombolGambar(it.partEc, it.maker, 'Part No. E/C')}
+        ${tombolGambar(it.partHarness, it.maker, 'Connector Harness')}
         <button type="button" class="btn-ubah-qty" data-row="${it.row}">✏️ Ubah Qty</button>
       </div>
     </div>`;
