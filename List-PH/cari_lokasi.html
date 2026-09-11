@@ -512,11 +512,64 @@ function jenisItem(it, kunci){
 // cukup satu baris ini, tidak ada tempat lain yang perlu diubah.
 const MESIN_GAMBAR = 'google';   // 'google' | 'bing'
 
+// Peta nama maker -> kata yang benar-benar dipakai mencari gambar.
+// Disusun dari isi kolom MAKER yang NYATA ada di List-PH, bukan tebakan.
+// Alasannya: kolom itu banyak berisi singkatan internal yang, kalau dicari
+// apa adanya, menghasilkan gambar yang sama sekali tidak berhubungan -
+// "HRS" (97 baris) mengembalikan macam-macam, sedangkan "Hirose" langsung
+// tepat; "TE" (147 baris) terlalu umum sebagai kata.
+// Kunci ditulis dalam bentuk yang sudah dinormalkan: HURUF BESAR, tanda
+// hubung/titik jadi spasi, spasi ganda dirapatkan.
+const PETA_MAKER = {
+  'HRS':      'Hirose',
+  'HIROSE':   'Hirose',
+  'TE':       'TE Connectivity',
+  'TYCO':     'TE Connectivity',
+  'AMP':      'TE Connectivity AMP',
+  'JAE':      'JAE Japan Aviation Electronics',
+  'I PEX':    'I-PEX',          // di data tertulis dua-duanya: "I-PEX" dan "I PEX"
+  'IPEX':     'I-PEX',
+  'FCI':      'FCI Amphenol',
+  'FC1':      'FCI Amphenol',   // salah ketik yang ada di data (huruf I jadi angka 1)
+  '3M HTK':   '3M',
+  'MOLEX':    'Molex',
+  'JST':      'JST',
+};
+
+// Maker yang TIDAK boleh ikut ke query karena justru merusak hasil.
+const MAKER_DIABAIKAN = new Set(['LOKAL']);
+
+function makerUntukCari(maker){
+  let m = (maker || '').trim();
+  if (!m) return '';
+
+  // Sebagian sel MAKER ternyata berisi TAUTAN PDF datasheet, bukan nama
+  // pabrikan. Kalau ikut dimasukkan, query jadi berisi alamat panjang dan
+  // hasil gambarnya kacau.
+  if (/^https?:\/\//i.test(m)) return '';
+
+  // Satu sel kadang memuat DUA maker: "JST, HRS" / "TYco, te" / "JST / TE".
+  // Diambil yang pertama saja - menggabung keduanya membuat query bertabrakan
+  // dan hasilnya malah kosong.
+  m = m.split(/[,/]/)[0].trim();
+  if (!m) return '';
+
+  const kunci = m.toUpperCase().replace(/[.\-_]+/g, ' ').replace(/\s+/g, ' ').trim();
+  if (MAKER_DIABAIKAN.has(kunci)) return '';
+  return PETA_MAKER[kunci] || m;   // tidak ada di peta -> pakai apa adanya
+}
+
+function queryGambar(kode, maker){
+  return [kode, makerUntukCari(maker)]
+    .map(s => (s || '').trim()).filter(Boolean).join(' ');
+}
+
 function alamatGambar(kode, maker){
-  // Nama maker ikut disertakan kalau ada: nomor part sering dipakai ulang
-  // oleh pabrikan berbeda, jadi tanpa maker hasilnya bisa barang lain sama
-  // sekali. Yang TAMPIL di tombol tetap kodenya saja supaya tombol ringkas.
-  const query = [kode, maker].map(s => (s || '').trim()).filter(Boolean).join(' ');
+  // Nama maker ikut disertakan: nomor part sering dipakai ulang oleh pabrikan
+  // berbeda, jadi tanpa maker hasilnya bisa barang lain sama sekali. Yang
+  // TAMPIL di tombol tetap kodenya saja supaya tombolnya ringkas - query
+  // lengkapnya bisa dilihat di tooltip tombol.
+  const query = queryGambar(kode, maker);
   return MESIN_GAMBAR === 'bing'
     ? 'https://www.bing.com/images/search?q=' + encodeURIComponent(query)
     : 'https://www.google.com/search?tbm=isch&q=' + encodeURIComponent(query);
@@ -528,9 +581,12 @@ function tombolGambar(kode, maker, labelKolom){
   // rel="noopener noreferrer": tab yang dibuka tidak bisa menyentuh halaman ini
   // lewat window.opener, dan alamat halaman ini tidak ikut terkirim ke mesin
   // pencari sebagai referrer.
+  // Tooltip menampilkan query LENGKAP yang akan dicari (termasuk maker hasil
+  // penerjemahan) - jadi kalau hasil gambarnya meleset, kelihatan kata apa
+  // yang sebenarnya dikirim, tanpa perlu membuka kode.
   return `<a class="btn-gambar" target="_blank" rel="noopener noreferrer"
              href="${escapeHtml(alamatGambar(k, maker))}"
-             title="Cari gambar ${escapeHtml(labelKolom)}: ${escapeHtml(k)}">
+             title="Cari gambar ${escapeHtml(labelKolom)} — kata kunci: ${escapeHtml(queryGambar(k, maker))}">
             <span class="ikon">🖼</span>
             <span class="kode">Lihat gambar ${escapeHtml(k)}</span>
           </a>`;
