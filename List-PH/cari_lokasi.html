@@ -114,6 +114,33 @@
     .btn-gambar,.btn-ubah-qty{flex:1 1 100%;justify-content:center;text-align:center}
     .btn-gambar .kode{max-width:none}
   }
+  /* Tombol pensil kecil di sebelah nilai Part No. E/C & Connector Harness.
+     Sengaja samar sampai disentuh: yang dibaca orang adalah NOMOR PART-nya,
+     tombolnya jangan sampai ikut merebut perhatian. */
+  .btn-pensil{
+    background:transparent;border:none;cursor:pointer;padding:0 0 0 6px;
+    font-size:12px;line-height:1;opacity:.35;transition:opacity .15s;
+    vertical-align:middle;
+  }
+  .btn-pensil:hover,.btn-pensil:focus-visible{opacity:1}
+  .item:hover .btn-pensil{opacity:.6}
+  /* Di layar sentuh tidak ada hover - biar selalu cukup terlihat. */
+  @media (hover:none){ .btn-pensil{opacity:.55} }
+
+  /* Baris "sebelum -> sesudah" di dalam popup ubah nomor part */
+  .mp-preview{
+    font-size:12.5px;margin:10px 0 4px;padding:10px;border-radius:8px;
+    background:#0b1220;border:1px solid var(--line);line-height:1.7;
+  }
+  .mp-preview .dari{color:#fca5a5;text-decoration:line-through;word-break:break-all}
+  .mp-preview .jadi{color:#4ade80;font-weight:700;word-break:break-all}
+  .mp-preview .tak-berubah{color:var(--muted);font-style:italic}
+  .mp-catatan{
+    font-size:11.5px;color:var(--muted);line-height:1.6;margin-top:8px;
+    padding:9px 10px;border-radius:8px;background:#0b1220;border:1px solid var(--line);
+  }
+  .mp-catatan b{color:#93c5fd}
+
   .btn-ubah-qty{
     background:transparent;color:var(--accent);border:1px solid #14532d;border-radius:8px;
     font-size:12.5px;font-weight:600;padding:7px 12px;cursor:pointer;
@@ -227,6 +254,37 @@ Ketemu barisnya? Qty-nya bisa langsung diubah dari sini juga.</p>
     <div class="modal-actions">
       <button id="mqBatal" type="button">Batal</button>
       <button id="mqSimpan" type="button">Simpan</button>
+    </div>
+  </div>
+</div>
+
+<!-- ================== POPUP UBAH NOMOR PART ================== -->
+<div class="modal-overlay" id="modalPart">
+  <div class="modal-box">
+    <h3>✏️ Ubah Nomor Part</h3>
+    <div class="modal-info">
+      <div class="baris"><span>No Rak</span><b id="mpRak">-</b></div>
+      <div class="baris"><span>Baris List-PH</span><b id="mpRow">-</b></div>
+    </div>
+
+    <label for="mpPartEc">Part No. E/C</label>
+    <input type="text" id="mpPartEc" autocomplete="off" autocapitalize="characters" spellcheck="false">
+
+    <label for="mpHarness">Connector Harness</label>
+    <input type="text" id="mpHarness" autocomplete="off" autocapitalize="characters" spellcheck="false">
+
+    <div class="mp-preview" id="mpPreview"></div>
+
+    <div class="mp-catatan">
+      Label untuk nomor yang berubah otomatis ditambahkan ke
+      <b>Buat Label</b>, jadi tinggal dicetak.
+    </div>
+
+    <div id="mpStatus"></div>
+
+    <div class="modal-actions">
+      <button id="mpBatal" type="button">Batal</button>
+      <button id="mpSimpan" type="button">Simpan</button>
     </div>
   </div>
 </div>
@@ -360,6 +418,11 @@ const MQTT_TOPIC = 'poshheader/qrscan/883f4243';   // topic SAVE (Ubah Qty / +1-
 const T_CARI_REQ = MQTT_TOPIC + '/cari/req';
 const T_CARI_RES = MQTT_TOPIC + '/cari/res';
 const T_SAVE_RES = MQTT_TOPIC + '/save/res';
+// Ubah nomor part (tombol pensil) + label otomatis yang menyertainya.
+const T_PART_REQ = MQTT_TOPIC + '/part/req';
+const T_PART_RES = MQTT_TOPIC + '/part/res';
+const T_LABEL_TAMBAH_REQ = MQTT_TOPIC + '/label/tambah/req';
+const T_LABEL_TAMBAH_RES = MQTT_TOPIC + '/label/tambah/res';
 
 let mqttClient = null;
 let mqttEverConnected = false;
@@ -397,7 +460,9 @@ function connectMqtt(){
   mqttClient.on('connect', () => {
     mqttEverConnected = true;
     if (transport === 'mqtt'){ setDotState('broker'); statusText.textContent = 'Terhubung ke broker MQTT'; }
-    mqttClient.subscribe([T_CARI_RES, T_SAVE_RES], { qos: 1 });
+    // T_PART_RES & T_LABEL_TAMBAH_RES ikut di-subscribe supaya jawaban tombol
+    // pensil (dan label otomatisnya) sampai ke mqttRequest lewat jalur broker.
+    mqttClient.subscribe([T_CARI_RES, T_SAVE_RES, T_PART_RES, T_LABEL_TAMBAH_RES], { qos: 1 });
   });
   mqttClient.on('message', (topic, message) => {
     let data;
@@ -604,8 +669,20 @@ function renderItem(it, kunci){
         ${labelBadge(jenis)}
       </div>
       <div class="detail">
-        <div class="baris"><span>Part No. E/C</span><b>${highlight(it.partEc, kunci)}</b></div>
-        <div class="baris"><span>Connector Harness</span><b>${highlight(it.partHarness, kunci)}</b></div>
+        <div class="baris">
+          <span>Part No. E/C</span>
+          <b>${highlight(it.partEc, kunci)}
+            <button type="button" class="btn-pensil" data-row="${it.row}" data-kolom="partEc"
+                    title="Ubah Part No. E/C">✏️</button>
+          </b>
+        </div>
+        <div class="baris">
+          <span>Connector Harness</span>
+          <b>${highlight(it.partHarness, kunci)}
+            <button type="button" class="btn-pensil" data-row="${it.row}" data-kolom="partHarness"
+                    title="Ubah Connector Harness">✏️</button>
+          </b>
+        </div>
         <div class="baris"><span>Klasifikasi</span><b>${escapeHtml(it.klasifikasi || '-')}</b></div>
         <div class="baris"><span>Maker</span><b>${escapeHtml(it.maker || '-')}</b></div>
         <div class="baris">
@@ -799,8 +876,227 @@ function tutupModalQty(){
 hasilWrap.addEventListener('click', (e) => {
   const btnUbah = e.target.closest('.btn-ubah-qty');
   if (btnUbah){ bukaModalUbahQty(Number(btnUbah.dataset.row)); return; }
+  const btnPensil = e.target.closest('.btn-pensil');
+  if (btnPensil){ bukaModalPart(Number(btnPensil.dataset.row), btnPensil.dataset.kolom); return; }
   const btnStep = e.target.closest('.btn-step');
   if (btnStep){ ubahQtyCepat(Number(btnStep.dataset.row), Number(btnStep.dataset.arah)); return; }
+});
+
+// =====================================================================
+//  UBAH NOMOR PART (tombol pensil)
+// =====================================================================
+// Beda dari Ubah Qty yang cuma mengubah jumlah, ini mengubah IDENTITAS
+// barang. Salah ketik di sini jauh lebih merusak - barangnya tidak akan
+// ketemu lagi waktu discan. Karena itu:
+//   - sebelum menyimpan, perubahan ditampilkan "lama -> baru" agar terbaca
+//   - nilai lama dikirim sebagai expectPartEc, jadi server menolak kalau
+//     barisnya ternyata sudah bergeser/berubah di Excel
+//   - sesudah berhasil, label untuk nomor BARU otomatis masuk antrean cetak
+
+const modalPart   = document.getElementById('modalPart');
+const mpRak       = document.getElementById('mpRak');
+const mpRow       = document.getElementById('mpRow');
+const mpPartEc    = document.getElementById('mpPartEc');
+const mpHarness   = document.getElementById('mpHarness');
+const mpPreview   = document.getElementById('mpPreview');
+const mpStatus    = document.getElementById('mpStatus');
+const mpBatal     = document.getElementById('mpBatal');
+const mpSimpan    = document.getElementById('mpSimpan');
+
+let itemPart = null;   // item yang sedang diubah
+
+function tampilkanStatusMp(pesan, jenis){
+  mpStatus.innerHTML = pesan ? pesanHtml(pesan, jenis || 'info') : '';
+}
+
+function bukaModalPart(row, fokusKolom){
+  const it = cariItemByRow(row);
+  if (!it) return;
+  itemPart = it;
+
+  mpRak.textContent = it.lokasi || '-';
+  mpRow.textContent = String(it.row);
+  mpPartEc.value  = it.partEc || '';
+  mpHarness.value = it.partHarness || '';
+
+  tampilkanStatusMp('', '');
+  mpSimpan.disabled = false;
+  mpSimpan.textContent = 'Simpan';
+  updatePreviewMp();
+
+  modalPart.classList.add('show');
+  // Fokuskan ke kolom yang pensilnya diklik - orang mengklik pensil di baris
+  // tertentu karena memang itu yang mau diubah.
+  const target = (fokusKolom === 'partHarness') ? mpHarness : mpPartEc;
+  target.focus();
+  target.select();
+}
+
+function tutupModalPart(){
+  modalPart.classList.remove('show');
+  itemPart = null;
+}
+
+function updatePreviewMp(){
+  if (!itemPart) return;
+  const ecLama = itemPart.partEc || '';
+  const hLama  = itemPart.partHarness || '';
+  const ecBaru = mpPartEc.value.trim();
+  const hBaru  = mpHarness.value.trim();
+
+  const baris = [];
+  if (ecBaru !== ecLama){
+    baris.push('Part No. E/C: <span class="dari">' + escapeHtml(ecLama || '(kosong)') +
+               '</span> → <span class="jadi">' + escapeHtml(ecBaru || '(kosong)') + '</span>');
+  }
+  if (hBaru !== hLama){
+    baris.push('Connector Harness: <span class="dari">' + escapeHtml(hLama || '(kosong)') +
+               '</span> → <span class="jadi">' + escapeHtml(hBaru || '(kosong)') + '</span>');
+  }
+  mpPreview.innerHTML = baris.length
+    ? baris.join('<br>')
+    : '<span class="tak-berubah">Belum ada yang diubah.</span>';
+}
+
+mpPartEc.addEventListener('input', updatePreviewMp);
+mpHarness.addEventListener('input', updatePreviewMp);
+mpBatal.addEventListener('click', tutupModalPart);
+modalPart.addEventListener('click', (e) => { if (e.target === modalPart) tutupModalPart(); });
+
+// Enter di kolom teks = simpan (kebiasaan wajar di form pendek seperti ini)
+[mpPartEc, mpHarness].forEach(el => {
+  el.addEventListener('keydown', (e) => { if (e.key === 'Enter') simpanPart(); });
+});
+
+/* Kirim perubahan ke PC - lewat jalur LOKAL atau BROKER, mengikuti
+   `transport` yang sedang aktif (pola sama persis dengan kirimScan). */
+async function kirimEditPart(payload){
+  if (transport === 'lokal'){
+    if (!apiBase && !(await cobaHealth(''))) throw new Error('Belum tersambung ke PC.');
+    const r = await fetchDenganBatasWaktu(apiBase + '/api/edit-part', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await r.json();
+    if (!data.ok) throw new Error(data.error || 'gagal menyimpan');
+    return data;
+  }
+  if (!mqttClient || !mqttClient.connected) throw new Error('Belum tersambung ke broker MQTT.');
+  return mqttRequest(T_PART_REQ, payload);
+}
+
+/* Tambahkan satu label ke antrean cetak (sheet Label) - dipakai ulang dari
+   endpoint yang SUDAH ada, yang juga dipakai halaman Buat Label. Karena itu
+   penanganan duplikatnya pun otomatis ikut: nomor yang sudah ada di antrean
+   tidak akan tercatat dua kali. */
+async function tambahLabelCetak(rak, part){
+  const payload = { rak: rak || '', part: part, perangkat: 'Cari Lokasi (Ubah Part)' };
+  if (transport === 'lokal'){
+    const r = await fetchDenganBatasWaktu(apiBase + '/api/label/tambah', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await r.json();
+    if (!data.ok) throw new Error(data.error || 'gagal menambah label');
+    return data;
+  }
+  if (!mqttClient || !mqttClient.connected) throw new Error('Belum tersambung ke broker MQTT.');
+  return mqttRequest(T_LABEL_TAMBAH_REQ, payload);
+}
+
+async function simpanPart(){
+  if (!itemPart) return;
+  const ecLama = itemPart.partEc || '';
+  const hLama  = itemPart.partHarness || '';
+  const ecBaru = mpPartEc.value.trim();
+  const hBaru  = mpHarness.value.trim();
+
+  if (!ecBaru){
+    tampilkanStatusMp('Part No. E/C tidak boleh dikosongkan — itu kunci pencarian seluruh sistem.', 'err');
+    mpPartEc.focus();
+    return;
+  }
+  if (ecBaru === ecLama && hBaru === hLama){
+    tampilkanStatusMp('Tidak ada yang diubah.', 'info');
+    return;
+  }
+
+  mpSimpan.disabled = true;
+  mpSimpan.textContent = 'Menyimpan...';
+  tampilkanStatusMp('Menyimpan ke Excel...', 'info');
+
+  try{
+    const hasil = await kirimEditPart({
+      row: itemPart.row,
+      // Kirim HANYA kolom yang benar-benar berubah. Mengirim keduanya terus
+      // membuat riwayat penuh "perubahan" yang sebenarnya tidak terjadi.
+      partEc:      ecBaru !== ecLama ? ecBaru : undefined,
+      partHarness: hBaru  !== hLama  ? hBaru  : undefined,
+      expectPartEc: ecLama,     // pengaman: baris harus masih berisi nilai ini
+      perangkat: 'Cari Lokasi (Ubah Part)',
+    });
+
+    // ---- Label otomatis untuk nomor yang BARU ----
+    // Nomor part di rak berubah berarti label fisiknya sudah tidak cocok lagi,
+    // jadi penggantinya langsung dimasukkan ke antrean cetak. Dibuat satu label
+    // per kolom yang berubah; yang tidak diperlukan bisa dihapus di halaman
+    // Buat Label.
+    const labelDibuat = [];
+    const gagalLabel = [];
+    const rak = (hasil.item && hasil.item.lokasi) || itemPart.lokasi || '';
+    for (const nomor of [ecBaru !== ecLama ? ecBaru : null,
+                         hBaru !== hLama && hBaru ? hBaru : null]){
+      if (!nomor) continue;
+      try{
+        const res = await tambahLabelCetak(rak, nomor);
+        labelDibuat.push(nomor + (res && res.duplikat ? ' (sudah ada)' : ''));
+      }catch(e){
+        // Nomor partnya SUDAH tersimpan - kegagalan label tidak boleh
+        // terlihat seperti kegagalan penyimpanan.
+        gagalLabel.push(nomor);
+      }
+    }
+
+    let pesan = '✔ Nomor part tersimpan.';
+    if (labelDibuat.length){
+      pesan += ' Label ditambahkan ke antrean cetak: ' + escapeHtml(labelDibuat.join(', ')) + '.';
+    }
+    if (gagalLabel.length){
+      pesan += ' Tapi label untuk ' + escapeHtml(gagalLabel.join(', ')) +
+               ' gagal dibuat — tambahkan manual di halaman Buat Label.';
+    }
+    tampilkanStatusMp(pesan, gagalLabel.length ? 'batas' : 'ok');
+
+    // Perbarui tampilan hasil supaya nomor barunya langsung kelihatan,
+    // tanpa harus mencari ulang.
+    if (hasilTerakhir){
+      const it = cariItemByRow(itemPart.row);
+      if (it){
+        if (ecBaru !== ecLama) it.partEc = ecBaru;
+        if (hBaru !== hLama)   it.partHarness = hBaru;
+        renderHasil(hasilTerakhir.data, hasilTerakhir.kunci);
+        const kartu = hasilWrap.querySelector('.item[data-row="' + itemPart.row + '"]');
+        if (kartu){ kartu.classList.add('flash'); setTimeout(() => kartu.classList.remove('flash'), 1700); }
+      }
+    }
+
+    mpSimpan.textContent = 'Tersimpan ✔';
+    setTimeout(tutupModalPart, 1400);
+  }catch(e){
+    tampilkanStatusMp('Gagal menyimpan: ' + escapeHtml(e.message), 'err');
+    mpSimpan.disabled = false;
+    mpSimpan.textContent = 'Simpan';
+  }
+}
+
+mpSimpan.addEventListener('click', simpanPart);
+
+// Esc menutup popup - kebiasaan wajar, dan menyelamatkan kalau tidak sengaja
+// terbuka di tengah pekerjaan.
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && modalPart.classList.contains('show')) tutupModalPart();
 });
 
 // ---------------------------------------------------------------
