@@ -93,9 +93,8 @@
                    display:flex;justify-content:flex-end;align-items:center;gap:8px;flex-wrap:wrap}
 
   /* Tombol "Lihat gambar" - satu untuk Part No. E/C, satu untuk Connector
-     Harness. Sengaja dibuat <a target="_blank">, bukan <button>+JS: dengan
-     begitu bisa ditahan-lama untuk "buka di tab baru", disalin alamatnya,
-     dan tetap jalan walau JS-nya bermasalah. */
+     Harness. Klik = buka POPUP di halaman ini (iframe Bing Images), TIDAK
+     membuka tab baru - lihat #modalGambar & bukaModalGambar(). */
   .btn-gambar{
     display:inline-flex;align-items:center;gap:6px;max-width:100%;
     background:transparent;color:#93c5fd;border:1px solid #1e3a8a;border-radius:8px;
@@ -187,6 +186,28 @@
   .modal-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:16px}
   .modal-actions button{padding:9px 16px;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer}
   .modal-actions button:disabled{opacity:.5;cursor:not-allowed}
+
+  /* Popup "Lihat gambar" - lebar (bukan modal-box sempit yang dipakai form),
+     isinya hasil pencarian gambar Bing di dalam iframe supaya TIDAK PERNAH
+     membuka tab baru. Catatan jujur: Bing bisa saja suatu saat memblokir
+     tampil-di-iframe (kebijakan X-Frame-Options bisa berubah kapan pun tanpa
+     pemberitahuan) - kalau itu terjadi browser TIDAK memberi error JS apa pun,
+     iframe-nya cuma kosong. Makanya selalu disediakan tautan "buka di tab
+     baru" di dalam popup sebagai jalan keluar manual, bukan otomatis. */
+  .modal-box-gambar{
+    background:var(--card);border:1px solid var(--line);border-radius:14px;
+    padding:16px;width:100%;max-width:900px;height:min(85vh,780px);
+    display:flex;flex-direction:column;
+  }
+  .mg-atas{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:10px}
+  .mg-judul{font-size:15px;font-weight:700;line-height:1.4}
+  .mg-judul small{display:block;font-weight:500;color:var(--muted);font-size:12px;margin-top:2px}
+  .mg-tutup{background:transparent;border:1px solid var(--line);border-radius:8px;
+            color:var(--text);font-size:18px;line-height:1;padding:6px 10px;cursor:pointer;flex-shrink:0}
+  .mg-bingkai-wrap{flex:1;min-height:0;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:#0b1220}
+  .mg-bingkai-wrap iframe{width:100%;height:100%;border:0}
+  .mg-catatan{font-size:12px;color:var(--muted);margin-top:10px;line-height:1.6}
+  .mg-catatan a{color:#93c5fd}
   #mqBatal{background:transparent;color:var(--muted);border:1px solid var(--line)}
   #mqSimpan{background:var(--accent);color:#03170a}
   #mqStatus{font-size:12.5px;padding:9px 10px;border-radius:8px;margin-top:10px;display:none;line-height:1.5}
@@ -285,6 +306,31 @@ Ketemu barisnya? Qty-nya bisa langsung diubah dari sini juga.</p>
     <div class="modal-actions">
       <button id="mpBatal" type="button">Batal</button>
       <button id="mpSimpan" type="button">Simpan</button>
+    </div>
+  </div>
+</div>
+
+<!-- Popup "Lihat gambar" - isinya iframe Bing Images, TIDAK PERNAH tab baru.
+     Lihat catatan panjang di CSS .modal-box-gambar dan di JS bukaModalGambar()
+     soal kenapa cuma Bing, dan kenapa selalu ada tautan tab-baru manual. -->
+<div class="modal-overlay" id="modalGambar">
+  <div class="modal-box-gambar">
+    <div class="mg-atas">
+      <div class="mg-judul">
+        🖼 <span id="mgJudul">Lihat gambar</span>
+        <small id="mgKueri"></small>
+      </div>
+      <button type="button" class="mg-tutup" id="mgTutup" title="Tutup">✕</button>
+    </div>
+    <div class="mg-bingkai-wrap">
+      <iframe id="mgFrame" src="about:blank" loading="lazy"
+              referrerpolicy="no-referrer"
+              title="Hasil pencarian gambar"></iframe>
+    </div>
+    <div class="mg-catatan">
+      Kalau gambar di atas tidak muncul (kosong), kemungkinan Bing sedang
+      memblokir tampilan di dalam popup ini —
+      <a id="mgTabBaru" href="#" target="_blank" rel="noopener noreferrer">buka di tab baru</a>.
     </div>
   </div>
 </div>
@@ -571,11 +617,21 @@ function jenisItem(it, kunci){
 }
 
 // =====================================================================
-//  TOMBOL "LIHAT GAMBAR"
+//  POPUP "LIHAT GAMBAR"
 // =====================================================================
-// Mesin pencari gambar yang dipakai. Ganti ke 'bing' kalau lebih disukai -
-// cukup satu baris ini, tidak ada tempat lain yang perlu diubah.
-const MESIN_GAMBAR = 'google';   // 'google' | 'bing'
+// Klik tombol -> buka POPUP di halaman ini (tidak pernah tab baru), isinya
+// hasil pencarian gambar BING di dalam <iframe>. Google TIDAK dipakai sama
+// sekali di sini - halaman hasil-nya memblokir diri ditampilkan di iframe
+// (X-Frame-Options), jadi kalau dipaksa hasilnya cuma kosong tanpa error.
+// Bing sendiri TIDAK dijamin selamanya mengizinkan ini juga - kebijakan
+// begini bisa berubah kapan pun, dan kalau itu terjadi browser TIDAK
+// memberi error JS apa pun (diam-diam kosong). Karena itu popup selalu
+// menyediakan tautan "Buka di tab baru" sebagai jalan keluar MANUAL - lihat
+// #modalGambar di HTML dan bukaModalGambar() di bawah.
+//
+// Mesin untuk tautan "buka di tab baru" itu (bukan untuk popup - popupnya
+// selalu Bing, cuma itu yang bisa ditampilkan di dalam halaman).
+const MESIN_TAB_BARU = 'bing';   // 'bing' | 'google'
 
 // Peta nama maker -> kata yang benar-benar dipakai mencari gambar.
 // Disusun dari isi kolom MAKER yang NYATA ada di List-PH, bukan tebakan.
@@ -629,32 +685,32 @@ function queryGambar(kode, maker){
     .map(s => (s || '').trim()).filter(Boolean).join(' ');
 }
 
-function alamatGambar(kode, maker){
-  // Nama maker ikut disertakan: nomor part sering dipakai ulang oleh pabrikan
-  // berbeda, jadi tanpa maker hasilnya bisa barang lain sama sekali. Yang
-  // TAMPIL di tombol tetap kodenya saja supaya tombolnya ringkas - query
-  // lengkapnya bisa dilihat di tooltip tombol.
-  const query = queryGambar(kode, maker);
-  return MESIN_GAMBAR === 'bing'
-    ? 'https://www.bing.com/images/search?q=' + encodeURIComponent(query)
-    : 'https://www.google.com/search?tbm=isch&q=' + encodeURIComponent(query);
+function alamatGambarPopup(query){
+  // Selalu Bing - lihat catatan di atas soal kenapa Google tidak dipakai.
+  return 'https://www.bing.com/images/search?q=' + encodeURIComponent(query);
+}
+
+function alamatGambarTabBaru(query){
+  return MESIN_TAB_BARU === 'google'
+    ? 'https://www.google.com/search?tbm=isch&q=' + encodeURIComponent(query)
+    : 'https://www.bing.com/images/search?q=' + encodeURIComponent(query);
 }
 
 function tombolGambar(kode, maker, labelKolom){
   const k = (kode || '').trim();
   if (!k) return '';   // tidak ada nomornya -> tombolnya tidak usah ada sama sekali
-  // rel="noopener noreferrer": tab yang dibuka tidak bisa menyentuh halaman ini
-  // lewat window.opener, dan alamat halaman ini tidak ikut terkirim ke mesin
-  // pencari sebagai referrer.
   // Tooltip menampilkan query LENGKAP yang akan dicari (termasuk maker hasil
   // penerjemahan) - jadi kalau hasil gambarnya meleset, kelihatan kata apa
   // yang sebenarnya dikirim, tanpa perlu membuka kode.
-  return `<a class="btn-gambar" target="_blank" rel="noopener noreferrer"
-             href="${escapeHtml(alamatGambar(k, maker))}"
+  // data-* dibaca oleh bukaModalGambar() lewat delegasi klik di hasilWrap -
+  // lihat tombol lain (btn-pensil, btn-step) yang memakai pola sama.
+  return `<button type="button" class="btn-gambar"
+             data-kode="${escapeHtml(k)}" data-maker="${escapeHtml(maker || '')}"
+             data-label="${escapeHtml(labelKolom)}"
              title="Cari gambar ${escapeHtml(labelKolom)} — kata kunci: ${escapeHtml(queryGambar(k, maker))}">
             <span class="ikon">🖼</span>
             <span class="kode">Lihat gambar ${escapeHtml(k)}</span>
-          </a>`;
+          </button>`;
 }
 
 function renderItem(it, kunci){
@@ -880,6 +936,11 @@ hasilWrap.addEventListener('click', (e) => {
   if (btnPensil){ bukaModalPart(Number(btnPensil.dataset.row), btnPensil.dataset.kolom); return; }
   const btnStep = e.target.closest('.btn-step');
   if (btnStep){ ubahQtyCepat(Number(btnStep.dataset.row), Number(btnStep.dataset.arah)); return; }
+  const btnGambar = e.target.closest('.btn-gambar');
+  if (btnGambar){
+    bukaModalGambar(btnGambar.dataset.kode, btnGambar.dataset.maker, btnGambar.dataset.label);
+    return;
+  }
 });
 
 // =====================================================================
@@ -1097,7 +1158,39 @@ mpSimpan.addEventListener('click', simpanPart);
 // terbuka di tengah pekerjaan.
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && modalPart.classList.contains('show')) tutupModalPart();
+  if (e.key === 'Escape' && modalGambar.classList.contains('show')) tutupModalGambar();
 });
+
+// =====================================================================
+//  POPUP "LIHAT GAMBAR" - buka/tutup
+// =====================================================================
+const modalGambar = document.getElementById('modalGambar');
+const mgJudul     = document.getElementById('mgJudul');
+const mgKueri     = document.getElementById('mgKueri');
+const mgFrame     = document.getElementById('mgFrame');
+const mgTabBaru   = document.getElementById('mgTabBaru');
+const mgTutup     = document.getElementById('mgTutup');
+
+function bukaModalGambar(kode, maker, labelKolom){
+  const query = queryGambar(kode, maker);
+  mgJudul.textContent = labelKolom + ': ' + kode;
+  mgKueri.textContent = 'kata kunci: ' + query;
+  // about:blank dulu sebelum ganti src - supaya kalau popup ini dibuka
+  // berkali-kali dengan kode berbeda, tidak sempat kelihatan sekilas hasil
+  // pencarian SEBELUMNYA saat iframe baru masih memuat.
+  mgFrame.src = 'about:blank';
+  mgFrame.src = alamatGambarPopup(query);
+  mgTabBaru.href = alamatGambarTabBaru(query);
+  modalGambar.classList.add('show');
+}
+
+function tutupModalGambar(){
+  modalGambar.classList.remove('show');
+  mgFrame.src = 'about:blank';   // hentikan pemuatan/audio-video di dalam iframe begitu ditutup
+}
+
+mgTutup.addEventListener('click', tutupModalGambar);
+modalGambar.addEventListener('click', (e) => { if (e.target === modalGambar) tutupModalGambar(); });
 
 // ---------------------------------------------------------------
 //  STEPPER +1 / -1 - kelipatan 1, sekali klik langsung tersimpan (tanpa
