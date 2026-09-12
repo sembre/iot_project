@@ -461,7 +461,18 @@ function loadScript(src, onload, onerror){
 // ---------- Jalur BROKER (MQTT) - HARUS SAMA PERSIS dengan BROKER_HOST/PORT/
 // TOPIC di mqtt_subscriber.py (PC), dan sama juga dengan scan.html supaya
 // satu instance mqtt_subscriber.py melayani semua halaman sekaligus. ----------
-const MQTT_BROKER_URL = 'wss://broker.emqx.io:8084/mqtt';
+// Dicoba berurutan - HARUS SAMA PERSIS urutannya dengan DAFTAR_BROKER di
+// mqtt_subscriber.py (PC) supaya HP & PC berakhir tersambung ke broker MQTT
+// yang SAMA. test.mosquitto.org didahulukan: broker.emqx.io akhir-akhir ini
+// sering menolak koneksi ("Server unavailable" - lihat catatan panjang di
+// mqtt_subscriber.py). Kalau broker yang sedang dicoba tidak membalas dalam
+// beberapa detik, connectMqtt() di bawah otomatis pindah ke broker berikutnya
+// di daftar ini - lihat watchdog setTimeout() di dalamnya.
+const DAFTAR_BROKER_URL = [
+  'wss://test.mosquitto.org:8081/mqtt',
+  'wss://broker.emqx.io:8084/mqtt',
+];
+let mqttBrokerIdx = 0;
 const MQTT_TOPIC = 'poshheader/qrscan/883f4243';   // topic SAVE (Ubah Qty / +1-1) - permintaan langsung ke sini
 const T_CARI_REQ = MQTT_TOPIC + '/cari/req';
 const T_CARI_RES = MQTT_TOPIC + '/cari/res';
@@ -495,10 +506,11 @@ function connectMqtt(){
     statusText.textContent = '⚠️ Gagal memuat library MQTT';
     return;
   }
+  const alamatBroker = DAFTAR_BROKER_URL[mqttBrokerIdx];
   setDotState('checking');
-  statusText.textContent = 'Menghubungkan ke broker MQTT...';
+  statusText.textContent = `Menghubungkan ke broker MQTT (${mqttBrokerIdx + 1}/${DAFTAR_BROKER_URL.length})...`;
   try{
-    mqttClient = mqtt.connect(MQTT_BROKER_URL, {
+    mqttClient = mqtt.connect(alamatBroker, {
       clientId: 'cari-lokasi-' + Math.random().toString(16).slice(2, 10),
       reconnectPeriod: 3000,
       connectTimeout: 8000,
@@ -534,11 +546,24 @@ function connectMqtt(){
     }
   });
 
+  // Watchdog: kalau BELUM PERNAH berhasil sama sekali dalam 9 detik, JANGAN
+  // terus menunggu broker yang sama - langsung coba broker BERIKUTNYA di
+  // DAFTAR_BROKER_URL (kalau masih ada). Dulu tidak ada ini: begitu satu
+  // broker bermasalah, halaman diam menunggu broker itu selamanya (mqtt.js
+  // otomatis retry ke alamat yang SAMA terus-menerus), walau broker lain di
+  // daftar sebenarnya bisa langsung dipakai.
   setTimeout(() => {
-    if (!mqttEverConnected && transport === 'mqtt'){
-      statusText.textContent = '⚠️ Belum tersambung ke broker setelah 10 detik (jaringan mungkin memblokir port 8084)';
+    if (mqttEverConnected || transport !== 'mqtt') return;
+    if (mqttBrokerIdx + 1 < DAFTAR_BROKER_URL.length){
+      mqttBrokerIdx++;
+      statusText.textContent = 'Broker sebelumnya tidak membalas, mencoba broker lain...';
+      try{ mqttClient.end(true); }catch(e){}
+      mqttClient = null;
+      connectMqtt();
+    } else {
+      statusText.textContent = '⚠️ Semua broker gagal dihubungi (jaringan mungkin memblokir port MQTT)';
     }
-  }, 10000);
+  }, 9000);
 }
 
 // ---- Pola request/response di atas MQTT: publish ke topic .../req dengan

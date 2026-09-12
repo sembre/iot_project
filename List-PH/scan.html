@@ -358,8 +358,18 @@ function loadScript(src, onload, onerror){
 }
 </script>
 <script>
-// HARUS SAMA PERSIS dengan BROKER_HOST/PORT/TOPIC di mqtt_subscriber.py (PC)
-const MQTT_BROKER_URL = 'wss://broker.emqx.io:8084/mqtt';
+// Dicoba berurutan - HARUS SAMA PERSIS urutannya dengan DAFTAR_BROKER di
+// mqtt_subscriber.py (PC) supaya HP & PC berakhir tersambung ke broker MQTT
+// yang SAMA. test.mosquitto.org didahulukan: broker.emqx.io akhir-akhir ini
+// sering menolak koneksi ("Server unavailable" - lihat catatan panjang di
+// mqtt_subscriber.py). Kalau broker yang sedang dicoba tidak membalas dalam
+// beberapa detik, connectMqtt() di bawah otomatis pindah ke broker berikutnya
+// di daftar ini - lihat watchdog setTimeout() di dalamnya.
+const DAFTAR_BROKER_URL = [
+  'wss://test.mosquitto.org:8081/mqtt',
+  'wss://broker.emqx.io:8084/mqtt',
+];
+let mqttBrokerIdx = 0;
 const MQTT_TOPIC = 'poshheader/qrscan/883f4243';
 // Topic dua arah: HP tanya -> PC cari di List-PH -> PC jawab
 const T_LOOKUP_REQ = MQTT_TOPIC + '/lookup/req';
@@ -1208,11 +1218,12 @@ function connectMqtt(){
     return;
   }
 
+  const alamatBroker = DAFTAR_BROKER_URL[mqttBrokerIdx];
   setDotState('checking');
-  statusText.textContent = 'Menghubungkan ke broker MQTT...';
+  statusText.textContent = `Menghubungkan ke broker MQTT (${mqttBrokerIdx + 1}/${DAFTAR_BROKER_URL.length})...`;
 
   try{
-    mqttClient = mqtt.connect(MQTT_BROKER_URL, {
+    mqttClient = mqtt.connect(alamatBroker, {
       clientId: 'hp-scan-' + Math.random().toString(16).slice(2, 10),
       reconnectPeriod: 3000,
       connectTimeout: 8000,
@@ -1252,18 +1263,29 @@ function connectMqtt(){
     statusText.textContent = 'Error MQTT: ' + (err && err.message ? err.message : err);
   });
 
-  // Watchdog: kalau setelah 10 detik belum pernah konek sama sekali, kemungkinan
-  // besar jaringan (WiFi/data seluler) memblokir port 8084 - kasih tau usernya,
-  // karena mqtt.js sendiri bisa diam saja (retry terus) tanpa event error.
+  // Watchdog: kalau BELUM PERNAH berhasil sama sekali dalam 9 detik, JANGAN
+  // terus menunggu broker yang sama - langsung coba broker BERIKUTNYA di
+  // DAFTAR_BROKER_URL (kalau masih ada). Dulu tidak ada ini: begitu satu
+  // broker bermasalah, halaman diam menunggu broker itu selamanya (mqtt.js
+  // otomatis retry ke alamat yang SAMA terus-menerus tanpa event error),
+  // walau broker lain di daftar sebenarnya bisa langsung dipakai. Popup
+  // peringatan baru muncul kalau SEMUA broker di daftar sudah dicoba.
   setTimeout(() => {
-    if (!mqttEverConnected){
-      const pesan = 'Belum tersambung ke broker setelah 10 detik. Kemungkinan jaringan (WiFi/data seluler) '
-                  + 'memblokir port 8084.\n\nCoba ganti jaringan (mis. WiFi ↔ data seluler), atau tes dulu di '
-                  + 'http://mqtt-client.emqx.com/ dari HP yang sama.';
-      camHint.textContent = camHint.textContent || '⚠️ ' + pesan;
-      showPopup(pesan, 'warn', {judul: 'Belum tersambung ke broker'});
+    if (mqttEverConnected) return;
+    if (mqttBrokerIdx + 1 < DAFTAR_BROKER_URL.length){
+      mqttBrokerIdx++;
+      statusText.textContent = 'Broker sebelumnya tidak membalas, mencoba broker lain...';
+      try{ mqttClient.end(true); }catch(e){}
+      mqttClient = null;
+      connectMqtt();
+      return;
     }
-  }, 10000);
+    const pesan = 'Belum tersambung ke broker manapun setelah dicoba satu-satu. Kemungkinan jaringan '
+                + '(WiFi/data seluler) memblokir port MQTT.\n\nCoba ganti jaringan (mis. WiFi ↔ data seluler), '
+                + 'atau tes dulu di http://mqtt-client.emqx.com/ dari HP yang sama.';
+    camHint.textContent = camHint.textContent || '⚠️ ' + pesan;
+    showPopup(pesan, 'warn', {judul: 'Belum tersambung ke broker'});
+  }, 9000);
 }
 
 // ============ PEMILIHAN JALUR: LOKAL vs BROKER ============

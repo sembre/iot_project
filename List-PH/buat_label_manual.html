@@ -401,10 +401,19 @@ function loadScript(src, onload, onerror){
   document.head.appendChild(s);
 }
 
-// ---------- Jalur BROKER (MQTT) - HARUS SAMA PERSIS dengan BROKER_HOST/PORT/
+// ---------- Jalur BROKER (MQTT) - HARUS SAMA PERSIS dengan DAFTAR_BROKER/
 // TOPIC di mqtt_subscriber.py (PC), dan sama juga dengan scan.html/
 // cari_lokasi.html supaya satu mqtt_subscriber.py melayani semuanya. ----------
-const MQTT_BROKER_URL = 'wss://broker.emqx.io:8084/mqtt';
+// Dicoba berurutan - test.mosquitto.org didahulukan: broker.emqx.io
+// akhir-akhir ini sering menolak koneksi ("Server unavailable" - lihat
+// catatan panjang di mqtt_subscriber.py). Kalau broker yang sedang dicoba
+// tidak membalas dalam beberapa detik, connectMqtt() di bawah otomatis
+// pindah ke broker berikutnya di daftar ini.
+const DAFTAR_BROKER_URL = [
+  'wss://test.mosquitto.org:8081/mqtt',
+  'wss://broker.emqx.io:8084/mqtt',
+];
+let mqttBrokerIdx = 0;
 const MQTT_TOPIC = 'poshheader/qrscan/883f4243';
 const T_LABEL_LIST_REQ = MQTT_TOPIC + '/label/list/req';
 const T_LABEL_LIST_RES = MQTT_TOPIC + '/label/list/res';
@@ -434,10 +443,11 @@ function connectMqtt(){
     statusText.textContent = '⚠️ Gagal memuat library MQTT';
     return;
   }
+  const alamatBroker = DAFTAR_BROKER_URL[mqttBrokerIdx];
   setDotState('checking');
-  statusText.textContent = 'Menghubungkan ke broker MQTT...';
+  statusText.textContent = `Menghubungkan ke broker MQTT (${mqttBrokerIdx + 1}/${DAFTAR_BROKER_URL.length})...`;
   try{
-    mqttClient = mqtt.connect(MQTT_BROKER_URL, {
+    mqttClient = mqtt.connect(alamatBroker, {
       clientId: 'buat-label-' + Math.random().toString(16).slice(2, 10),
       reconnectPeriod: 3000,
       connectTimeout: 8000,
@@ -472,11 +482,22 @@ function connectMqtt(){
     }
   });
 
+  // Watchdog: kalau BELUM PERNAH berhasil sama sekali dalam 9 detik, JANGAN
+  // terus menunggu broker yang sama - langsung coba broker BERIKUTNYA di
+  // DAFTAR_BROKER_URL (kalau masih ada). Lihat catatan yang sama di
+  // cari_lokasi.html/scan.html.
   setTimeout(() => {
-    if (!mqttEverConnected && transport === 'mqtt'){
-      statusText.textContent = '⚠️ Belum tersambung ke broker setelah 10 detik (jaringan mungkin memblokir port 8084)';
+    if (mqttEverConnected || transport !== 'mqtt') return;
+    if (mqttBrokerIdx + 1 < DAFTAR_BROKER_URL.length){
+      mqttBrokerIdx++;
+      statusText.textContent = 'Broker sebelumnya tidak membalas, mencoba broker lain...';
+      try{ mqttClient.end(true); }catch(e){}
+      mqttClient = null;
+      connectMqtt();
+    } else {
+      statusText.textContent = '⚠️ Semua broker gagal dihubungi (jaringan mungkin memblokir port MQTT)';
     }
-  }, 10000);
+  }, 9000);
 }
 
 // ---- Pola request/response di atas MQTT (sama seperti cari_lokasi.html):
