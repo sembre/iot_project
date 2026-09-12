@@ -93,8 +93,9 @@
                    display:flex;justify-content:flex-end;align-items:center;gap:8px;flex-wrap:wrap}
 
   /* Tombol "Lihat gambar" - satu untuk Part No. E/C, satu untuk Connector
-     Harness. Klik = buka POPUP di halaman ini (iframe Bing Images), TIDAK
-     membuka tab baru - lihat #modalGambar & bukaModalGambar(). */
+     Harness. Klik = buka POPUP di halaman ini (grid 4 thumbnail gambar lewat
+     Google Custom Search API), TIDAK membuka tab baru - lihat #modalGambar
+     & bukaModalGambar(). */
   .btn-gambar{
     display:inline-flex;align-items:center;gap:6px;max-width:100%;
     background:transparent;color:#93c5fd;border:1px solid #1e3a8a;border-radius:8px;
@@ -187,27 +188,47 @@
   .modal-actions button{padding:9px 16px;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer}
   .modal-actions button:disabled{opacity:.5;cursor:not-allowed}
 
-  /* Popup "Lihat gambar" - lebar (bukan modal-box sempit yang dipakai form),
-     isinya hasil pencarian gambar Bing di dalam iframe supaya TIDAK PERNAH
-     membuka tab baru. Catatan jujur: Bing bisa saja suatu saat memblokir
-     tampil-di-iframe (kebijakan X-Frame-Options bisa berubah kapan pun tanpa
-     pemberitahuan) - kalau itu terjadi browser TIDAK memberi error JS apa pun,
-     iframe-nya cuma kosong. Makanya selalu disediakan tautan "buka di tab
-     baru" di dalam popup sebagai jalan keluar manual, bukan otomatis. */
+  /* Popup "Lihat gambar" - menampilkan GRID 4 THUMBNAIL GAMBAR SUNGGUHAN
+     (bukan halaman hasil pencarian) lewat Google Custom Search JSON API,
+     supaya TIDAK PERNAH membuka tab baru dan loadingnya cepat (dipatok 4
+     hasil saja). Perlu API key + Search Engine ID (cx) - GRATIS, disimpan
+     di localStorage browser ini saja (tidak dikirim ke server List-PH). */
   .modal-box-gambar{
     background:var(--card);border:1px solid var(--line);border-radius:14px;
-    padding:16px;width:100%;max-width:900px;height:min(85vh,780px);
-    display:flex;flex-direction:column;
+    padding:16px;width:100%;max-width:640px;
+    display:flex;flex-direction:column;max-height:85vh;
   }
-  .mg-atas{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:10px}
+  .mg-atas{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:12px}
   .mg-judul{font-size:15px;font-weight:700;line-height:1.4}
   .mg-judul small{display:block;font-weight:500;color:var(--muted);font-size:12px;margin-top:2px}
   .mg-tutup{background:transparent;border:1px solid var(--line);border-radius:8px;
             color:var(--text);font-size:18px;line-height:1;padding:6px 10px;cursor:pointer;flex-shrink:0}
-  .mg-bingkai-wrap{flex:1;min-height:0;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:#0b1220}
-  .mg-bingkai-wrap iframe{width:100%;height:100%;border:0}
-  .mg-catatan{font-size:12px;color:var(--muted);margin-top:10px;line-height:1.6}
-  .mg-catatan a{color:#93c5fd}
+  .mg-catatan{font-size:12px;color:var(--muted);margin-top:12px;line-height:1.6}
+  .mg-catatan a{color:#93c5fd;cursor:pointer}
+
+  /* --- Pengaturan API key (tampil kalau belum diisi, atau kalau ditolak) --- */
+  .mg-setting p{font-size:13px;line-height:1.6;margin:0 0 8px}
+  .mg-setting ol{font-size:12.5px;color:var(--muted);line-height:1.8;margin:0 0 14px;padding-left:20px}
+  .mg-setting ol a{color:#93c5fd}
+  .mg-setting label{display:block;font-size:12px;color:var(--muted);margin:10px 0 4px}
+  .mg-setting input[type=text]{
+    width:100%;padding:10px 11px;border-radius:8px;border:1px solid var(--line);
+    background:#0b1220;color:var(--text);font-size:14px;font-family:inherit;
+  }
+  .mg-setting input[type=text]:focus{outline:2px solid var(--accent);outline-offset:-1px}
+  #mgSettingStatus{font-size:12.5px;margin-top:10px;line-height:1.5}
+  #mgSettingStatus.err{color:#fca5a5}
+
+  /* --- Grid hasil (2x2) --- */
+  .mg-status{font-size:13px;color:var(--muted);text-align:center;padding:24px 0}
+  .mg-status.err{color:#fca5a5}
+  .mg-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;overflow-y:auto}
+  .mg-thumb{
+    display:block;aspect-ratio:1/1;border-radius:10px;overflow:hidden;
+    border:1px solid var(--line);background:#0b1220;
+  }
+  .mg-thumb img{width:100%;height:100%;object-fit:contain;display:block}
+  @media (max-width:480px){ .mg-grid{grid-template-columns:1fr 1fr} }
   #mqBatal{background:transparent;color:var(--muted);border:1px solid var(--line)}
   #mqSimpan{background:var(--accent);color:#03170a}
   #mqStatus{font-size:12.5px;padding:9px 10px;border-radius:8px;margin-top:10px;display:none;line-height:1.5}
@@ -310,9 +331,9 @@ Ketemu barisnya? Qty-nya bisa langsung diubah dari sini juga.</p>
   </div>
 </div>
 
-<!-- Popup "Lihat gambar" - isinya iframe Bing Images, TIDAK PERNAH tab baru.
-     Lihat catatan panjang di CSS .modal-box-gambar dan di JS bukaModalGambar()
-     soal kenapa cuma Bing, dan kenapa selalu ada tautan tab-baru manual. -->
+<!-- Popup "Lihat gambar" - grid 4 thumbnail gambar SUNGGUHAN lewat Google
+     Custom Search API, TIDAK PERNAH buka tab baru. Lihat catatan panjang di
+     CSS .modal-box-gambar dan di JS bukaModalGambar()/muatHasilGambar(). -->
 <div class="modal-overlay" id="modalGambar">
   <div class="modal-box-gambar">
     <div class="mg-atas">
@@ -322,15 +343,39 @@ Ketemu barisnya? Qty-nya bisa langsung diubah dari sini juga.</p>
       </div>
       <button type="button" class="mg-tutup" id="mgTutup" title="Tutup">✕</button>
     </div>
-    <div class="mg-bingkai-wrap">
-      <iframe id="mgFrame" src="about:blank" loading="lazy"
-              referrerpolicy="no-referrer"
-              title="Hasil pencarian gambar"></iframe>
+
+    <!-- Pengaturan API key - tampil kalau belum diisi / ditolak Google -->
+    <div class="mg-setting" id="mgSetting" hidden>
+      <p>Untuk menampilkan gambar di sini (bukan tab baru), butuh API key
+         <b>Google Custom Search</b> — gratis, 100 pencarian/hari.</p>
+      <ol>
+        <li>Buka <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener noreferrer">Google Cloud Console</a>,
+            buat API key, lalu aktifkan <b>"Custom Search API"</b>.</li>
+        <li>Buka <a href="https://programmablesearchengine.google.com/controlpanel/create" target="_blank" rel="noopener noreferrer">Programmable Search Engine</a>,
+            buat mesin baru dengan <b>"Search the entire web"</b> dan
+            <b>"Image search"</b> aktif, lalu salin <b>Search engine ID (cx)</b>.</li>
+      </ol>
+      <label for="mgApiKey">API Key</label>
+      <input type="text" id="mgApiKey" autocomplete="off" spellcheck="false">
+      <label for="mgCx">Search Engine ID (cx)</label>
+      <input type="text" id="mgCx" autocomplete="off" spellcheck="false">
+      <div class="modal-actions">
+        <button type="button" id="mgSimpanKey">Simpan &amp; cari</button>
+      </div>
+      <div id="mgSettingStatus"></div>
     </div>
+
+    <!-- Hasil: grid 4 thumbnail -->
+    <div class="mg-hasil-wrap" id="mgHasilWrap" hidden>
+      <div class="mg-status" id="mgStatus"></div>
+      <div class="mg-grid" id="mgGrid"></div>
+    </div>
+
     <div class="mg-catatan">
-      Kalau gambar di atas tidak muncul (kosong), kemungkinan Bing sedang
-      memblokir tampilan di dalam popup ini —
-      <a id="mgTabBaru" href="#" target="_blank" rel="noopener noreferrer">buka di tab baru</a>.
+      Menampilkan 4 hasil teratas dari Google Gambar — klik gambar untuk
+      membukanya penuh.
+      <a id="mgCariLengkap" target="_blank" rel="noopener noreferrer">Cari lebih banyak di tab baru</a>
+      · <a id="mgGantiKey">ganti API key</a>
     </div>
   </div>
 </div>
@@ -620,18 +665,29 @@ function jenisItem(it, kunci){
 //  POPUP "LIHAT GAMBAR"
 // =====================================================================
 // Klik tombol -> buka POPUP di halaman ini (tidak pernah tab baru), isinya
-// hasil pencarian gambar BING di dalam <iframe>. Google TIDAK dipakai sama
-// sekali di sini - halaman hasil-nya memblokir diri ditampilkan di iframe
-// (X-Frame-Options), jadi kalau dipaksa hasilnya cuma kosong tanpa error.
-// Bing sendiri TIDAK dijamin selamanya mengizinkan ini juga - kebijakan
-// begini bisa berubah kapan pun, dan kalau itu terjadi browser TIDAK
-// memberi error JS apa pun (diam-diam kosong). Karena itu popup selalu
-// menyediakan tautan "Buka di tab baru" sebagai jalan keluar MANUAL - lihat
-// #modalGambar di HTML dan bukaModalGambar() di bawah.
-//
-// Mesin untuk tautan "buka di tab baru" itu (bukan untuk popup - popupnya
-// selalu Bing, cuma itu yang bisa ditampilkan di dalam halaman).
-const MESIN_TAB_BARU = 'bing';   // 'bing' | 'google'
+// GRID 4 THUMBNAIL GAMBAR SUNGGUHAN (bukan halaman hasil pencarian) lewat
+// Google Custom Search JSON API - dipatok 4 hasil supaya loadingnya cepat.
+// Perlu API key + Search Engine ID (cx), GRATIS 100 pencarian/hari, disimpan
+// di localStorage browser ini sendiri (lihat #mgSetting di HTML dan
+// muatHasilGambar() di bawah). Kalau key/cx ditolak Google (salah, atau
+// jatah harian habis), popup kembali menampilkan form pengaturan dengan
+// pesan errornya - bukan diam-diam kosong.
+const JUMLAH_GAMBAR = 4;
+const KUNCI_LS_API_KEY = 'googleCseKey';
+const KUNCI_LS_CX      = 'googleCseCx';
+
+// Search Engine ID (cx) bawaan - sudah dibuat sebelumnya di Programmable
+// Search Engine, jadi kolomnya terisi otomatis dan pengguna tinggal isi
+// API key saja. Tetap bisa diganti manual (tersimpan di localStorage, yang
+// lebih diutamakan daripada nilai bawaan ini).
+const CX_BAWAAN = '03b6fdbb0d8b94f07';
+
+// Tautan "cari lebih banyak di tab baru" tetap disediakan di dalam popup -
+// ini pencarian gambar PENUH (bukan cuma 4), dibuka di tab baru HANYA kalau
+// pengguna sendiri yang mengklik, bukan otomatis.
+function alamatGambarTabBaru(query){
+  return 'https://www.google.com/search?tbm=isch&q=' + encodeURIComponent(query);
+}
 
 // Peta nama maker -> kata yang benar-benar dipakai mencari gambar.
 // Disusun dari isi kolom MAKER yang NYATA ada di List-PH, bukan tebakan.
@@ -683,17 +739,6 @@ function makerUntukCari(maker){
 function queryGambar(kode, maker){
   return [kode, makerUntukCari(maker)]
     .map(s => (s || '').trim()).filter(Boolean).join(' ');
-}
-
-function alamatGambarPopup(query){
-  // Selalu Bing - lihat catatan di atas soal kenapa Google tidak dipakai.
-  return 'https://www.bing.com/images/search?q=' + encodeURIComponent(query);
-}
-
-function alamatGambarTabBaru(query){
-  return MESIN_TAB_BARU === 'google'
-    ? 'https://www.google.com/search?tbm=isch&q=' + encodeURIComponent(query)
-    : 'https://www.bing.com/images/search?q=' + encodeURIComponent(query);
 }
 
 function tombolGambar(kode, maker, labelKolom){
@@ -1162,33 +1207,133 @@ document.addEventListener('keydown', (e) => {
 });
 
 // =====================================================================
-//  POPUP "LIHAT GAMBAR" - buka/tutup
+//  POPUP "LIHAT GAMBAR" - buka/tutup, pengaturan API key, muat grid
 // =====================================================================
-const modalGambar = document.getElementById('modalGambar');
-const mgJudul     = document.getElementById('mgJudul');
-const mgKueri     = document.getElementById('mgKueri');
-const mgFrame     = document.getElementById('mgFrame');
-const mgTabBaru   = document.getElementById('mgTabBaru');
-const mgTutup     = document.getElementById('mgTutup');
+const modalGambar    = document.getElementById('modalGambar');
+const mgJudul         = document.getElementById('mgJudul');
+const mgKueri         = document.getElementById('mgKueri');
+const mgTutup         = document.getElementById('mgTutup');
+const mgSetting       = document.getElementById('mgSetting');
+const mgApiKey        = document.getElementById('mgApiKey');
+const mgCx            = document.getElementById('mgCx');
+const mgSimpanKey     = document.getElementById('mgSimpanKey');
+const mgSettingStatus = document.getElementById('mgSettingStatus');
+const mgHasilWrap     = document.getElementById('mgHasilWrap');
+const mgStatus        = document.getElementById('mgStatus');
+const mgGrid          = document.getElementById('mgGrid');
+const mgCariLengkap   = document.getElementById('mgCariLengkap');
+const mgGantiKey      = document.getElementById('mgGantiKey');
+
+let mgQueryAktif = '';   // kata kunci yang sedang tampil - dipakai ulang saat "simpan & cari"
+
+function apiKeyTersimpan(){ return (localStorage.getItem(KUNCI_LS_API_KEY) || '').trim(); }
+function cxTersimpan(){ return (localStorage.getItem(KUNCI_LS_CX) || '').trim() || CX_BAWAAN; }
+
+function tampilkanSettingGambar(pesanError){
+  mgHasilWrap.hidden = true;
+  mgSetting.hidden = false;
+  mgApiKey.value = apiKeyTersimpan();
+  mgCx.value = cxTersimpan();
+  mgSettingStatus.textContent = pesanError || '';
+  mgSettingStatus.className = pesanError ? 'err' : '';
+  (mgApiKey.value ? mgCx : mgApiKey).focus();
+}
 
 function bukaModalGambar(kode, maker, labelKolom){
   const query = queryGambar(kode, maker);
+  mgQueryAktif = query;
   mgJudul.textContent = labelKolom + ': ' + kode;
   mgKueri.textContent = 'kata kunci: ' + query;
-  // about:blank dulu sebelum ganti src - supaya kalau popup ini dibuka
-  // berkali-kali dengan kode berbeda, tidak sempat kelihatan sekilas hasil
-  // pencarian SEBELUMNYA saat iframe baru masih memuat.
-  mgFrame.src = 'about:blank';
-  mgFrame.src = alamatGambarPopup(query);
-  mgTabBaru.href = alamatGambarTabBaru(query);
+  mgCariLengkap.href = alamatGambarTabBaru(query);
   modalGambar.classList.add('show');
+
+  if (!apiKeyTersimpan() || !cxTersimpan()){
+    tampilkanSettingGambar();
+  } else {
+    muatHasilGambar(query);
+  }
 }
 
 function tutupModalGambar(){
   modalGambar.classList.remove('show');
-  mgFrame.src = 'about:blank';   // hentikan pemuatan/audio-video di dalam iframe begitu ditutup
 }
 
+// Dipatok JUMLAH_GAMBAR (4) hasil saja lewat parameter &num= - jadi bukan
+// "ambil semua lalu potong di JS", tapi Google sendiri yang hanya mengirim
+// 4, sehingga waktu tunggunya memang lebih singkat.
+async function muatHasilGambar(query){
+  mgSetting.hidden = true;
+  mgHasilWrap.hidden = false;
+  mgGrid.innerHTML = '';
+  mgStatus.textContent = 'Mencari gambar...';
+  mgStatus.className = 'mg-status';
+
+  const key = apiKeyTersimpan(), cx = cxTersimpan();
+  const url = 'https://www.googleapis.com/customsearch/v1'
+    + '?key=' + encodeURIComponent(key)
+    + '&cx=' + encodeURIComponent(cx)
+    + '&searchType=image&num=' + JUMLAH_GAMBAR + '&safe=off'
+    + '&q=' + encodeURIComponent(query);
+
+  let r, data;
+  try{
+    r = await fetchDenganBatasWaktu(url, {}, 10000);
+    data = await r.json();
+  }catch(e){
+    mgStatus.textContent = 'Gagal mencari gambar: ' + e.message;
+    mgStatus.className = 'mg-status err';
+    return;
+  }
+
+  if (!r.ok){
+    const pesan = (data && data.error && data.error.message) || ('HTTP ' + r.status);
+    // 400/403 di Custom Search API HAMPIR SELALU berarti key/cx salah atau
+    // jatah 100 pencarian/hari sudah habis - kembali ke form pengaturan
+    // dengan pesan aslinya, bukan cuma "gagal" tanpa penjelasan.
+    if (r.status === 400 || r.status === 403 || r.status === 429){
+      tampilkanSettingGambar('Ditolak Google: ' + pesan
+        + ' — cek API key/Search Engine ID, atau jatah 100 pencarian/hari sudah habis (coba lagi besok).');
+    } else {
+      mgStatus.textContent = 'Gagal mencari gambar: ' + pesan;
+      mgStatus.className = 'mg-status err';
+    }
+    return;
+  }
+
+  const items = (data.items || []).slice(0, JUMLAH_GAMBAR);
+  if (!items.length){
+    mgStatus.textContent = 'Tidak ada hasil gambar untuk kata kunci ini.';
+    return;
+  }
+  mgStatus.textContent = '';
+  mgGrid.innerHTML = items.map(it => {
+    const thumb = (it.image && it.image.thumbnailLink) || it.link;
+    const penuh = it.link || thumb;
+    return `<a class="mg-thumb" href="${escapeHtml(penuh)}" target="_blank" rel="noopener noreferrer"
+               title="${escapeHtml(it.title || '')}">
+              <img src="${escapeHtml(thumb)}" alt="${escapeHtml(it.title || query)}" loading="lazy">
+            </a>`;
+  }).join('');
+}
+
+mgSimpanKey.addEventListener('click', () => {
+  const key = mgApiKey.value.trim(), cx = mgCx.value.trim();
+  if (!key || !cx){
+    mgSettingStatus.textContent = 'API Key dan Search Engine ID harus diisi.';
+    mgSettingStatus.className = 'err';
+    return;
+  }
+  localStorage.setItem(KUNCI_LS_API_KEY, key);
+  localStorage.setItem(KUNCI_LS_CX, cx);
+  muatHasilGambar(mgQueryAktif);
+});
+
+// Enter di salah satu kolom = langsung simpan (kebiasaan wajar di form pendek)
+[mgApiKey, mgCx].forEach(el => {
+  el.addEventListener('keydown', (e) => { if (e.key === 'Enter') mgSimpanKey.click(); });
+});
+
+mgGantiKey.addEventListener('click', (e) => { e.preventDefault(); tampilkanSettingGambar(); });
 mgTutup.addEventListener('click', tutupModalGambar);
 modalGambar.addEventListener('click', (e) => { if (e.target === modalGambar) tutupModalGambar(); });
 
