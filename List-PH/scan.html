@@ -140,14 +140,14 @@
   }
   .gambar-row button:active{opacity:.8}
 
-  /* Popup "Lihat gambar" - SAMA seperti di cari_lokasi.html: widget pencarian
-     gambar Google (Programmable Search Engine) langsung lewat iframe, TIDAK
-     PERNAH tab baru, TIDAK ADA API KEY DI MANA PUN. Sebelumnya fitur ini
-     lewat server proxy ke Custom Search JSON API - itu ditinggalkan karena
-     API tersebut sudah DITUTUP Google untuk pendaftar baru (lihat catatan
-     lengkap di JS, dekat definisi CSE_CX). DigiKey (nomor part distributor)
-     tetap tautan tab baru terpisah - itu pencarian katalog distributor,
-     bukan gambar umum. */
+  /* Popup "Lihat gambar" - SAMA seperti di cari_lokasi.html: iframe Bing
+     Images LANGSUNG di dalam popup (bukan tab baru, bukan widget/window.open
+     terpisah). Riwayat singkat: server proxy ke Google Custom Search JSON
+     API (ditutup untuk pendaftar baru) dan raw iframe/widget resmi ke Google
+     (diblokir X-Frame-Options / ikon rusak di praktik) sama-sama gagal -
+     Bing Images tidak memblokir framing pihak ketiga, jadi dipakai di sini.
+     DigiKey (nomor part distributor) tetap tautan tab baru terpisah - itu
+     pencarian katalog distributor, bukan gambar umum. */
   .modal-overlay{
     position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;
     align-items:center;justify-content:center;z-index:50;padding:20px;
@@ -165,9 +165,9 @@
             color:var(--text);font-size:18px;line-height:1;padding:6px 10px;cursor:pointer;flex-shrink:0}
   .mg-catatan{font-size:12px;color:var(--muted);margin-top:12px;line-height:1.6}
   .mg-catatan a{color:#93c5fd;cursor:pointer}
-  .mg-frame{
-    width:100%;height:58vh;min-height:320px;border:0;border-radius:10px;
-    background:#fff;
+  #mgFrame{
+    width:100%;height:58vh;min-height:320px;border-radius:10px;
+    border:1px solid var(--line);background:#fff;
   }
 </style>
 </head>
@@ -225,16 +225,16 @@
     <div class="mrow"><span>Baris di List-PH</span><b id="mRow">—</b></div>
   </div>
 
-  <!-- Bantuan visual: tampilkan GAMBAR ASLI konektor lewat popup di halaman
-       ini (SAMA seperti tombol "Lihat gambar" di cari_lokasi.html - grid 4
-       thumbnail, TIDAK PERNAH tab baru, TIDAK ADA API key di sini), dengan
-       query otomatis dari maker + nomor part connector-nya - supaya operator
-       bisa mencocokkan BENTUK FISIK konektor yang dipegang dengan foto
-       katalog aslinya, bukan cuma percaya teks. Query ikut update kalau
-       field Maker/Connector Harness diisi/diedit manual (lihat
+  <!-- Bantuan visual: klik "Lihat gambar" membuka POPUP di halaman ini
+       (iframe Bing Images LANGSUNG di dalamnya, TIDAK PERNAH tab baru
+       otomatis - lihat bukaModalGambar() di JS), dengan query otomatis
+       dari maker + nomor part connector-nya - supaya operator bisa
+       mencocokkan BENTUK FISIK konektor yang dipegang dengan foto katalog
+       aslinya, bukan cuma percaya teks. Query ikut update kalau field
+       Maker/Connector Harness diisi/diedit manual (lihat
        perbaruiPencarianGambar()). DigiKey tetap tautan tab baru terpisah -
-       situs itu based pencarian nomor part distributor, beda dari gambar
-       umum, jadi tidak cocok dijadikan grid thumbnail. -->
+       situs itu berbasis pencarian nomor part distributor, beda dari
+       gambar umum. -->
   <div id="gambarBox" style="display:none">
     <div class="hint" style="text-align:left;margin:10px 0 6px">
       🔎 Cek bentuk konektor <b id="gambarMaker">—</b> · <span id="gambarKode">—</span>
@@ -242,13 +242,13 @@
     <div class="gambar-row">
       <button type="button" id="btnLihatGambar">🖼 Lihat gambar</button>
     </div>
-    <div class="hint">Gambar asli ditampilkan langsung di sini (bukan tab baru).
+    <div class="hint">Gambar asli ditampilkan langsung di popup (bukan tab baru).
       <a id="linkGambarDigikey" href="#" target="_blank" rel="noopener noreferrer" style="color:#fbbf24">Coba di DigiKey</a>
       kalau mau cari lewat nomor part distributor (foto produk resmi).</div>
   </div>
 
   <!-- Popup "Lihat gambar" - SAMA persis polanya dengan #modalGambar di
-       cari_lokasi.html: widget Google langsung lewat iframe, tanpa API key. -->
+       cari_lokasi.html: iframe Bing Images, tanpa API key. -->
   <div class="modal-overlay" id="modalGambar">
     <div class="modal-box-gambar">
       <div class="mg-atas">
@@ -258,14 +258,10 @@
         </div>
         <button type="button" class="mg-tutup" id="mgTutup" title="Tutup">✕</button>
       </div>
-      <div class="mg-hasil-wrap" id="mgHasilWrap">
-        <iframe id="mgFrame" class="mg-frame" title="Hasil pencarian gambar Google" loading="lazy"></iframe>
-      </div>
+      <iframe id="mgFrame" src="about:blank" title="Hasil pencarian gambar" loading="lazy"></iframe>
       <div class="mg-catatan">
-        Kalau kotak di atas kosong/belum menampilkan hasil, ketik kata kunci ini
-        di kolom pencarian yang ada di dalamnya: <b id="mgKataTempel"></b>.
-        <br>
-        <a id="mgCariLengkap" target="_blank" rel="noopener noreferrer">Atau buka di tab baru (layar penuh)</a>
+        Kalau kotak di atas kosong/lama memuat -
+        <a id="mgTabBaru" target="_blank" rel="noopener noreferrer">buka di tab baru (layar penuh)</a>.
       </div>
     </div>
   </div>
@@ -371,8 +367,8 @@ const T_LOOKUP_RES = MQTT_TOPIC + '/lookup/res';
 const T_SAVE_RES   = MQTT_TOPIC + '/save/res';
 // CATATAN: dulu ada topic .../gambar/req & .../gambar/res di sini untuk
 // tombol "Lihat gambar" lewat proxy server. Sudah tidak dipakai - sekarang
-// "Lihat gambar" langsung pakai widget Google (lihat CSE_CX & bukaModalGambar()
-// di bawah), tidak lewat PC/broker sama sekali.
+// "Lihat gambar" langsung tampilkan iframe Bing Images di popup (lihat
+// bukaModalGambar() di bawah), tidak lewat PC/broker sama sekali.
 
 const video = document.getElementById('video');
 const canvas = document.getElementById('canvas');
@@ -720,13 +716,11 @@ function onCodeDetected(text){
 }
 
 // ============ BANTUAN VISUAL: CARI GAMBAR BENTUK KONEKTOR ============
-// SAMA seperti tombol "Lihat gambar" di cari_lokasi.html: klik -> popup di
-// halaman ini (tidak pernah otomatis tab baru), isinya widget pencarian
-// gambar Google (Programmable Search Engine) lewat iframe. TIDAK ADA API KEY
-// DI HALAMAN INI, TIDAK LEWAT SERVER SAMA SEKALI - lihat catatan lengkap di
-// CSE_CX & bukaModalGambar() lebih bawah soal kenapa arsitektur "server
-// proxy ke Custom Search JSON API" ditinggalkan (API itu sudah ditutup
-// Google untuk pendaftar baru). DigiKey tetap tautan tab baru terpisah -
+// SAMA seperti tombol "Lihat gambar" di cari_lokasi.html: klik -> buka
+// POPUP di halaman ini (tidak pernah otomatis tab baru), isinya iframe
+// yang langsung menampilkan hasil pencarian gambar (Bing Images) - lihat
+// bukaModalGambar() lebih bawah. TIDAK ADA API KEY DI HALAMAN INI, TIDAK
+// LEWAT SERVER SAMA SEKALI. DigiKey tetap tautan tab baru terpisah -
 // situs distributor itu berbasis nomor part produsen, bukan gambar umum.
 //
 // Query diprioritaskan pakai MAKER + kode HASIL SCAN (Part Number E/C)
@@ -808,46 +802,43 @@ function perbaruiPencarianGambar(){
 });
 
 // =====================================================================
-//  POPUP "LIHAT GAMBAR" - widget Google langsung lewat iframe, TIDAK ADA
-//  API KEY, TIDAK LEWAT SERVER SAMA SEKALI.
+//  POPUP "LIHAT GAMBAR" - iframe Bing Images LANGSUNG di dalam popup,
+//  TIDAK ADA API KEY, TIDAK LEWAT SERVER SAMA SEKALI.
 //
-//  Sebelumnya fitur ini minta server (server.py/mqtt_subscriber.py) yang
-//  memanggil Custom Search JSON API. Itu ditinggalkan karena per kebijakan
-//  Google, Custom Search JSON API SUDAH DITUTUP untuk API key/project baru
-//  (lihat https://developers.google.com/custom-search/v1/overview - "closed
-//  to new customers"), jadi API key baru manapun tidak akan pernah bisa
-//  dapat akses walau semua langkah setup benar. Widget/hosted-page di bawah
-//  ini produk yang beda (Programmable Search Engine), gratis, dan tidak
-//  kena penutupan itu - cukup arahkan iframe ke cse.google.com dengan cx
-//  yang sudah dikonfigurasi.
+//  Riwayat singkat (SAMA dengan cari_lokasi.html - lihat catatan lengkap
+//  di sana): (1) server proxy ke Google Custom Search JSON API -
+//  ditinggalkan, API itu SUDAH DITUTUP Google untuk API key/project baru;
+//  (2) raw <iframe src="https://cse.google.com/cse?cx=..."> - GAGAL,
+//  diblokir X-Frame-Options ("refused to connect"); (3) widget resmi
+//  Google (Programmable Search Element, cse.js) ditanam di modal - GAGAL
+//  DI PRAKTIK, menampilkan ikon gambar rusak di browser pengguna. SEKARANG
+//  (kembali ke rancangan awal yang sudah teruji jalan): iframe langsung ke
+//  Bing Images - Bing TIDAK memblokir framing pihak ketiga, jadi hasil
+//  gambar tampil langsung di dalam popup ini.
 // =====================================================================
-const CSE_CX = '03b6fdbb0d8b94f07';   // Search Engine ID - BUKAN rahasia, aman ditaruh di HTML publik
+function alamatGambarBing(query){
+  return 'https://www.bing.com/images/search?q=' + encodeURIComponent(query);
+}
 
-const modalGambar    = document.getElementById('modalGambar');
-const mgJudul         = document.getElementById('mgJudul');
-const mgKueri         = document.getElementById('mgKueri');
-const mgTutup         = document.getElementById('mgTutup');
-const mgFrame         = document.getElementById('mgFrame');
-const mgKataTempel    = document.getElementById('mgKataTempel');
-const mgCariLengkap  = document.getElementById('mgCariLengkap');
+const modalGambar = document.getElementById('modalGambar');
+const mgJudul      = document.getElementById('mgJudul');
+const mgKueri      = document.getElementById('mgKueri');
+const mgTutup      = document.getElementById('mgTutup');
+const mgFrame      = document.getElementById('mgFrame');
+const mgTabBaru    = document.getElementById('mgTabBaru');
 
 function bukaModalGambar(query, judul){
+  const alamat = alamatGambarBing(query);
   mgJudul.textContent = judul || 'Lihat gambar';
   mgKueri.textContent = 'kata kunci: ' + query;
-  mgKataTempel.textContent = query;
-  mgCariLengkap.href = 'https://www.google.com/search?tbm=isch&q=' + encodeURIComponent(query);
-  // 'q' dipakai supaya widget LANGSUNG menampilkan hasil tanpa operator
-  // ketik apa pun. Kalau untuk alasan tertentu tidak auto-jalan, kata kunci
-  // yang sama sudah ditampilkan di mg-catatan (mgKataTempel) untuk ditempel
-  // manual ke kolom pencarian di dalam widget.
-  mgFrame.src = 'https://cse.google.com/cse?cx=' + encodeURIComponent(CSE_CX)
-              + '&q=' + encodeURIComponent(query);
+  mgFrame.src = alamat;
+  mgTabBaru.href = alamat;
   modalGambar.classList.add('show');
 }
 
 function tutupModalGambar(){
   modalGambar.classList.remove('show');
-  mgFrame.src = 'about:blank';   // hentikan widget di latar belakang saat popup ditutup
+  mgFrame.src = 'about:blank';
 }
 
 btnLihatGambar.addEventListener('click', () => {
