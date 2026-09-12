@@ -191,8 +191,11 @@
   /* Popup "Lihat gambar" - menampilkan GRID 4 THUMBNAIL GAMBAR SUNGGUHAN
      (bukan halaman hasil pencarian) lewat Google Custom Search JSON API,
      supaya TIDAK PERNAH membuka tab baru dan loadingnya cepat (dipatok 4
-     hasil saja). Perlu API key + Search Engine ID (cx) - GRATIS, disimpan
-     di localStorage browser ini saja (tidak dikirim ke server List-PH). */
+     hasil saja). API KEY TIDAK PERNAH ADA DI HALAMAN INI - popup ini cuma
+     minta PC (server.py / mqtt_subscriber.py) yang mencarikan, PC-lah yang
+     menyimpan & memakai key-nya (lihat gambar_google.py). Jadi siapa pun
+     yang buka halaman ini dan tersambung ke PC tersebut otomatis bisa
+     pakai fitur ini tanpa mengisi apa pun. */
   .modal-box-gambar{
     background:var(--card);border:1px solid var(--line);border-radius:14px;
     padding:16px;width:100%;max-width:640px;
@@ -206,21 +209,7 @@
   .mg-catatan{font-size:12px;color:var(--muted);margin-top:12px;line-height:1.6}
   .mg-catatan a{color:#93c5fd;cursor:pointer}
 
-  /* --- Pengaturan API key (tampil kalau belum diisi, atau kalau ditolak) --- */
-  .mg-setting p{font-size:13px;line-height:1.6;margin:0 0 8px}
-  .mg-setting ol{font-size:12.5px;color:var(--muted);line-height:1.8;margin:0 0 14px;padding-left:20px}
-  .mg-setting ol a{color:#93c5fd}
-  .mg-setting label{display:block;font-size:12px;color:var(--muted);margin:10px 0 4px}
-  .mg-setting input[type=text]{
-    width:100%;padding:10px 11px;border-radius:8px;border:1px solid var(--line);
-    background:#0b1220;color:var(--text);font-size:14px;font-family:inherit;
-  }
-  .mg-setting input[type=text]:focus{outline:2px solid var(--accent);outline-offset:-1px}
-  #mgSettingStatus{font-size:12.5px;margin-top:10px;line-height:1.5}
-  #mgSettingStatus.err{color:#fca5a5}
-
-  /* --- Grid hasil (2x2) --- */
-  .mg-status{font-size:13px;color:var(--muted);text-align:center;padding:24px 0}
+  .mg-status{font-size:13px;color:var(--muted);text-align:center;padding:24px 0;line-height:1.6}
   .mg-status.err{color:#fca5a5}
   .mg-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;overflow-y:auto}
   .mg-thumb{
@@ -344,29 +333,10 @@ Ketemu barisnya? Qty-nya bisa langsung diubah dari sini juga.</p>
       <button type="button" class="mg-tutup" id="mgTutup" title="Tutup">✕</button>
     </div>
 
-    <!-- Pengaturan API key - tampil kalau belum diisi / ditolak Google -->
-    <div class="mg-setting" id="mgSetting" hidden>
-      <p>Untuk menampilkan gambar di sini (bukan tab baru), butuh API key
-         <b>Google Custom Search</b> — gratis, 100 pencarian/hari.</p>
-      <ol>
-        <li>Buka <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener noreferrer">Google Cloud Console</a>,
-            buat API key, lalu aktifkan <b>"Custom Search API"</b>.</li>
-        <li>Buka <a href="https://programmablesearchengine.google.com/controlpanel/create" target="_blank" rel="noopener noreferrer">Programmable Search Engine</a>,
-            buat mesin baru dengan <b>"Search the entire web"</b> dan
-            <b>"Image search"</b> aktif, lalu salin <b>Search engine ID (cx)</b>.</li>
-      </ol>
-      <label for="mgApiKey">API Key</label>
-      <input type="text" id="mgApiKey" autocomplete="off" spellcheck="false">
-      <label for="mgCx">Search Engine ID (cx)</label>
-      <input type="text" id="mgCx" autocomplete="off" spellcheck="false">
-      <div class="modal-actions">
-        <button type="button" id="mgSimpanKey">Simpan &amp; cari</button>
-      </div>
-      <div id="mgSettingStatus"></div>
-    </div>
-
-    <!-- Hasil: grid 4 thumbnail -->
-    <div class="mg-hasil-wrap" id="mgHasilWrap" hidden>
+    <!-- Hasil: grid 4 thumbnail. Tidak ada form API key sama sekali di sini -
+         pencarian dilakukan oleh PC (lewat jalur lokal/MQTT yang sama dengan
+         fitur lain), jadi tidak ada apa pun yang perlu diisi pengguna. -->
+    <div class="mg-hasil-wrap" id="mgHasilWrap">
       <div class="mg-status" id="mgStatus"></div>
       <div class="mg-grid" id="mgGrid"></div>
     </div>
@@ -375,7 +345,6 @@ Ketemu barisnya? Qty-nya bisa langsung diubah dari sini juga.</p>
       Menampilkan 4 hasil teratas dari Google Gambar — klik gambar untuk
       membukanya penuh.
       <a id="mgCariLengkap" target="_blank" rel="noopener noreferrer">Cari lebih banyak di tab baru</a>
-      · <a id="mgGantiKey">ganti API key</a>
     </div>
   </div>
 </div>
@@ -514,6 +483,10 @@ const T_PART_REQ = MQTT_TOPIC + '/part/req';
 const T_PART_RES = MQTT_TOPIC + '/part/res';
 const T_LABEL_TAMBAH_REQ = MQTT_TOPIC + '/label/tambah/req';
 const T_LABEL_TAMBAH_RES = MQTT_TOPIC + '/label/tambah/res';
+// Tombol "Lihat gambar" - PC yang menyimpan & memakai API key Google (lihat
+// gambar_google.py), browser ini cuma kirim kata kunci & terima hasilnya.
+const T_GAMBAR_REQ = MQTT_TOPIC + '/gambar/req';
+const T_GAMBAR_RES = MQTT_TOPIC + '/gambar/res';
 
 let mqttClient = null;
 let mqttEverConnected = false;
@@ -553,7 +526,7 @@ function connectMqtt(){
     if (transport === 'mqtt'){ setDotState('broker'); statusText.textContent = 'Terhubung ke broker MQTT'; }
     // T_PART_RES & T_LABEL_TAMBAH_RES ikut di-subscribe supaya jawaban tombol
     // pensil (dan label otomatisnya) sampai ke mqttRequest lewat jalur broker.
-    mqttClient.subscribe([T_CARI_RES, T_SAVE_RES, T_PART_RES, T_LABEL_TAMBAH_RES], { qos: 1 });
+    mqttClient.subscribe([T_CARI_RES, T_SAVE_RES, T_PART_RES, T_LABEL_TAMBAH_RES, T_GAMBAR_RES], { qos: 1 });
   });
   mqttClient.on('message', (topic, message) => {
     let data;
@@ -666,21 +639,13 @@ function jenisItem(it, kunci){
 // =====================================================================
 // Klik tombol -> buka POPUP di halaman ini (tidak pernah tab baru), isinya
 // GRID 4 THUMBNAIL GAMBAR SUNGGUHAN (bukan halaman hasil pencarian) lewat
-// Google Custom Search JSON API - dipatok 4 hasil supaya loadingnya cepat.
-// Perlu API key + Search Engine ID (cx), GRATIS 100 pencarian/hari, disimpan
-// di localStorage browser ini sendiri (lihat #mgSetting di HTML dan
-// muatHasilGambar() di bawah). Kalau key/cx ditolak Google (salah, atau
-// jatah harian habis), popup kembali menampilkan form pengaturan dengan
-// pesan errornya - bukan diam-diam kosong.
-const JUMLAH_GAMBAR = 4;
-const KUNCI_LS_API_KEY = 'googleCseKey';
-const KUNCI_LS_CX      = 'googleCseCx';
-
-// Search Engine ID (cx) bawaan - sudah dibuat sebelumnya di Programmable
-// Search Engine, jadi kolomnya terisi otomatis dan pengguna tinggal isi
-// API key saja. Tetap bisa diganti manual (tersimpan di localStorage, yang
-// lebih diutamakan daripada nilai bawaan ini).
-const CX_BAWAAN = '03b6fdbb0d8b94f07';
+// Google Custom Search JSON API. TIDAK ADA API KEY DI HALAMAN INI SAMA
+// SEKALI - kata kunci dikirim ke PC (lewat jalur lokal ATAU broker MQTT,
+// SAMA PERSIS seperti fitur lain di halaman ini), PC itulah yang punya key
+// dan memanggil Google (lihat gambar_google.py di server), lalu balik
+// mengirim hasil gambarnya saja. Jadi siapa pun yang buka halaman ini dan
+// tersambung ke PC tersebut otomatis bisa pakai fitur ini tanpa mengisi
+// apa pun sendiri.
 
 // Tautan "cari lebih banyak di tab baru" tetap disediakan di dalam popup -
 // ini pencarian gambar PENUH (bukan cuma 4), dibuka di tab baru HANYA kalau
@@ -1207,107 +1172,55 @@ document.addEventListener('keydown', (e) => {
 });
 
 // =====================================================================
-//  POPUP "LIHAT GAMBAR" - buka/tutup, pengaturan API key, muat grid
+//  POPUP "LIHAT GAMBAR" - buka/tutup, minta PC yang mencari (lokal/MQTT)
 // =====================================================================
-const modalGambar    = document.getElementById('modalGambar');
-const mgJudul         = document.getElementById('mgJudul');
-const mgKueri         = document.getElementById('mgKueri');
-const mgTutup         = document.getElementById('mgTutup');
-const mgSetting       = document.getElementById('mgSetting');
-const mgApiKey        = document.getElementById('mgApiKey');
-const mgCx            = document.getElementById('mgCx');
-const mgSimpanKey     = document.getElementById('mgSimpanKey');
-const mgSettingStatus = document.getElementById('mgSettingStatus');
-const mgHasilWrap     = document.getElementById('mgHasilWrap');
-const mgStatus        = document.getElementById('mgStatus');
-const mgGrid          = document.getElementById('mgGrid');
-const mgCariLengkap   = document.getElementById('mgCariLengkap');
-const mgGantiKey      = document.getElementById('mgGantiKey');
-
-let mgQueryAktif = '';   // kata kunci yang sedang tampil - dipakai ulang saat "simpan & cari"
-
-function apiKeyTersimpan(){ return (localStorage.getItem(KUNCI_LS_API_KEY) || '').trim(); }
-function cxTersimpan(){ return (localStorage.getItem(KUNCI_LS_CX) || '').trim() || CX_BAWAAN; }
-
-function tampilkanSettingGambar(pesanError){
-  mgHasilWrap.hidden = true;
-  mgSetting.hidden = false;
-  mgApiKey.value = apiKeyTersimpan();
-  mgCx.value = cxTersimpan();
-  mgSettingStatus.textContent = pesanError || '';
-  mgSettingStatus.className = pesanError ? 'err' : '';
-  (mgApiKey.value ? mgCx : mgApiKey).focus();
-}
+const modalGambar   = document.getElementById('modalGambar');
+const mgJudul       = document.getElementById('mgJudul');
+const mgKueri       = document.getElementById('mgKueri');
+const mgTutup       = document.getElementById('mgTutup');
+const mgStatus      = document.getElementById('mgStatus');
+const mgGrid        = document.getElementById('mgGrid');
+const mgCariLengkap = document.getElementById('mgCariLengkap');
 
 function bukaModalGambar(kode, maker, labelKolom){
   const query = queryGambar(kode, maker);
-  mgQueryAktif = query;
   mgJudul.textContent = labelKolom + ': ' + kode;
   mgKueri.textContent = 'kata kunci: ' + query;
   mgCariLengkap.href = alamatGambarTabBaru(query);
   modalGambar.classList.add('show');
-
-  if (!apiKeyTersimpan() || !cxTersimpan()){
-    tampilkanSettingGambar();
-  } else {
-    muatHasilGambar(query);
-  }
+  muatHasilGambar(query);
 }
 
 function tutupModalGambar(){
   modalGambar.classList.remove('show');
 }
 
-// Dipatok JUMLAH_GAMBAR (4) hasil saja lewat parameter &num= - jadi bukan
-// "ambil semua lalu potong di JS", tapi Google sendiri yang hanya mengirim
-// 4, sehingga waktu tunggunya memang lebih singkat.
-async function muatHasilGambar(query){
-  mgSetting.hidden = true;
-  mgHasilWrap.hidden = false;
-  mgGrid.innerHTML = '';
-  mgStatus.textContent = 'Mencari gambar...';
-  mgStatus.className = 'mg-status';
-
-  const key = apiKeyTersimpan(), cx = cxTersimpan();
-  const url = 'https://www.googleapis.com/customsearch/v1'
-    + '?key=' + encodeURIComponent(key)
-    + '&cx=' + encodeURIComponent(cx)
-    + '&searchType=image&num=' + JUMLAH_GAMBAR + '&safe=off'
-    + '&q=' + encodeURIComponent(query);
-
-  let r, data;
-  try{
-    r = await fetchDenganBatasWaktu(url, {}, 10000);
-    data = await r.json();
-  }catch(e){
-    mgStatus.textContent = 'Gagal mencari gambar: ' + e.message;
-    mgStatus.className = 'mg-status err';
-    return;
+/* Minta PC yang mencari ke Google (lewat jalur LOKAL atau BROKER, mengikuti
+   `transport` yang sedang aktif - pola sama persis dengan kirimEditPart).
+   API key TIDAK PERNAH ada di sini - lihat gambar_google.py di server. */
+async function mintaCariGambar(query){
+  if (transport === 'lokal'){
+    if (!apiBase && !(await cobaHealth(''))) throw new Error('Belum tersambung ke PC.');
+    const r = await fetchDenganBatasWaktu(
+      apiBase + '/api/gambar?q=' + encodeURIComponent(query), {}, 12000);
+    const data = await r.json();
+    if (!data.ok) throw new Error(data.error || 'gagal mencari gambar');
+    return data.items || [];
   }
+  if (!mqttClient || !mqttClient.connected) throw new Error('Belum tersambung ke broker MQTT.');
+  const data = await mqttRequest(T_GAMBAR_REQ, { q: query });
+  return data.items || [];
+}
 
-  if (!r.ok){
-    const pesan = (data && data.error && data.error.message) || ('HTTP ' + r.status);
-    // 400/403 di Custom Search API HAMPIR SELALU berarti key/cx salah atau
-    // jatah 100 pencarian/hari sudah habis - kembali ke form pengaturan
-    // dengan pesan aslinya, bukan cuma "gagal" tanpa penjelasan.
-    if (r.status === 400 || r.status === 403 || r.status === 429){
-      tampilkanSettingGambar('Ditolak Google: ' + pesan
-        + ' — cek API key/Search Engine ID, atau jatah 100 pencarian/hari sudah habis (coba lagi besok).');
-    } else {
-      mgStatus.textContent = 'Gagal mencari gambar: ' + pesan;
-      mgStatus.className = 'mg-status err';
-    }
-    return;
-  }
-
-  const items = (data.items || []).slice(0, JUMLAH_GAMBAR);
+function renderGridGambar(items, query){
   if (!items.length){
     mgStatus.textContent = 'Tidak ada hasil gambar untuk kata kunci ini.';
+    mgGrid.innerHTML = '';
     return;
   }
   mgStatus.textContent = '';
   mgGrid.innerHTML = items.map(it => {
-    const thumb = (it.image && it.image.thumbnailLink) || it.link;
+    const thumb = it.thumbnail || it.link;
     const penuh = it.link || thumb;
     return `<a class="mg-thumb" href="${escapeHtml(penuh)}" target="_blank" rel="noopener noreferrer"
                title="${escapeHtml(it.title || '')}">
@@ -1316,24 +1229,19 @@ async function muatHasilGambar(query){
   }).join('');
 }
 
-mgSimpanKey.addEventListener('click', () => {
-  const key = mgApiKey.value.trim(), cx = mgCx.value.trim();
-  if (!key || !cx){
-    mgSettingStatus.textContent = 'API Key dan Search Engine ID harus diisi.';
-    mgSettingStatus.className = 'err';
-    return;
+async function muatHasilGambar(query){
+  mgGrid.innerHTML = '';
+  mgStatus.textContent = 'Mencari gambar...';
+  mgStatus.className = 'mg-status';
+  try{
+    const items = await mintaCariGambar(query);
+    renderGridGambar(items, query);
+  }catch(e){
+    mgStatus.textContent = 'Gagal mencari gambar: ' + e.message;
+    mgStatus.className = 'mg-status err';
   }
-  localStorage.setItem(KUNCI_LS_API_KEY, key);
-  localStorage.setItem(KUNCI_LS_CX, cx);
-  muatHasilGambar(mgQueryAktif);
-});
+}
 
-// Enter di salah satu kolom = langsung simpan (kebiasaan wajar di form pendek)
-[mgApiKey, mgCx].forEach(el => {
-  el.addEventListener('keydown', (e) => { if (e.key === 'Enter') mgSimpanKey.click(); });
-});
-
-mgGantiKey.addEventListener('click', (e) => { e.preventDefault(); tampilkanSettingGambar(); });
 mgTutup.addEventListener('click', tutupModalGambar);
 modalGambar.addEventListener('click', (e) => { if (e.target === modalGambar) tutupModalGambar(); });
 
