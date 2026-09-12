@@ -140,12 +140,14 @@
   }
   .gambar-row button:active{opacity:.8}
 
-  /* Popup "Lihat gambar" - SAMA seperti di cari_lokasi.html: grid 4
-     thumbnail gambar SUNGGUHAN lewat Google Custom Search, TIDAK PERNAH
-     tab baru, dan TIDAK ADA API KEY DI HALAMAN INI - PC (server.py /
-     mqtt_subscriber.py) yang mencari & menyimpan key-nya, lihat
-     gambar_google.py. DigiKey (nomor part distributor) tetap tautan tab
-     baru terpisah - itu pencarian katalog distributor, bukan gambar umum. */
+  /* Popup "Lihat gambar" - SAMA seperti di cari_lokasi.html: widget pencarian
+     gambar Google (Programmable Search Engine) langsung lewat iframe, TIDAK
+     PERNAH tab baru, TIDAK ADA API KEY DI MANA PUN. Sebelumnya fitur ini
+     lewat server proxy ke Custom Search JSON API - itu ditinggalkan karena
+     API tersebut sudah DITUTUP Google untuk pendaftar baru (lihat catatan
+     lengkap di JS, dekat definisi CSE_CX). DigiKey (nomor part distributor)
+     tetap tautan tab baru terpisah - itu pencarian katalog distributor,
+     bukan gambar umum. */
   .modal-overlay{
     position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;
     align-items:center;justify-content:center;z-index:50;padding:20px;
@@ -163,14 +165,10 @@
             color:var(--text);font-size:18px;line-height:1;padding:6px 10px;cursor:pointer;flex-shrink:0}
   .mg-catatan{font-size:12px;color:var(--muted);margin-top:12px;line-height:1.6}
   .mg-catatan a{color:#93c5fd;cursor:pointer}
-  .mg-status{font-size:13px;color:var(--muted);text-align:center;padding:24px 0;line-height:1.6}
-  .mg-status.err{color:#fca5a5}
-  .mg-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;overflow-y:auto}
-  .mg-thumb{
-    display:block;aspect-ratio:1/1;border-radius:10px;overflow:hidden;
-    border:1px solid var(--line);background:#0b1220;
+  .mg-frame{
+    width:100%;height:58vh;min-height:320px;border:0;border-radius:10px;
+    background:#fff;
   }
-  .mg-thumb img{width:100%;height:100%;object-fit:contain;display:block}
 </style>
 </head>
 <body>
@@ -250,7 +248,7 @@
   </div>
 
   <!-- Popup "Lihat gambar" - SAMA persis polanya dengan #modalGambar di
-       cari_lokasi.html. -->
+       cari_lokasi.html: widget Google langsung lewat iframe, tanpa API key. -->
   <div class="modal-overlay" id="modalGambar">
     <div class="modal-box-gambar">
       <div class="mg-atas">
@@ -261,12 +259,13 @@
         <button type="button" class="mg-tutup" id="mgTutup" title="Tutup">✕</button>
       </div>
       <div class="mg-hasil-wrap" id="mgHasilWrap">
-        <div class="mg-status" id="mgStatus"></div>
-        <div class="mg-grid" id="mgGrid"></div>
+        <iframe id="mgFrame" class="mg-frame" title="Hasil pencarian gambar Google" loading="lazy"></iframe>
       </div>
       <div class="mg-catatan">
-        Menampilkan 4 hasil teratas dari Google Gambar — klik gambar untuk membukanya penuh.
-        <a id="mgCariLengkap" target="_blank" rel="noopener noreferrer">Cari lebih banyak di tab baru</a>
+        Kalau kotak di atas kosong/belum menampilkan hasil, ketik kata kunci ini
+        di kolom pencarian yang ada di dalamnya: <b id="mgKataTempel"></b>.
+        <br>
+        <a id="mgCariLengkap" target="_blank" rel="noopener noreferrer">Atau buka di tab baru (layar penuh)</a>
       </div>
     </div>
   </div>
@@ -370,10 +369,10 @@ const MQTT_TOPIC = 'poshheader/qrscan/883f4243';
 const T_LOOKUP_REQ = MQTT_TOPIC + '/lookup/req';
 const T_LOOKUP_RES = MQTT_TOPIC + '/lookup/res';
 const T_SAVE_RES   = MQTT_TOPIC + '/save/res';
-// Tombol "Lihat gambar" - PC yang menyimpan & memakai API key Google (lihat
-// gambar_google.py), HP ini cuma kirim kata kunci & terima hasilnya.
-const T_GAMBAR_REQ = MQTT_TOPIC + '/gambar/req';
-const T_GAMBAR_RES = MQTT_TOPIC + '/gambar/res';
+// CATATAN: dulu ada topic .../gambar/req & .../gambar/res di sini untuk
+// tombol "Lihat gambar" lewat proxy server. Sudah tidak dipakai - sekarang
+// "Lihat gambar" langsung pakai widget Google (lihat CSE_CX & bukaModalGambar()
+// di bawah), tidak lewat PC/broker sama sekali.
 
 const video = document.getElementById('video');
 const canvas = document.getElementById('canvas');
@@ -722,13 +721,13 @@ function onCodeDetected(text){
 
 // ============ BANTUAN VISUAL: CARI GAMBAR BENTUK KONEKTOR ============
 // SAMA seperti tombol "Lihat gambar" di cari_lokasi.html: klik -> popup di
-// halaman ini (grid 4 thumbnail gambar SUNGGUHAN lewat Google Custom Search),
-// TIDAK PERNAH tab baru. TIDAK ADA API KEY DI HALAMAN INI SAMA SEKALI - kata
-// kunci dikirim ke PC (jalur lokal ATAU broker MQTT, topic .../gambar/req),
-// PC itulah yang menyimpan & memakai key-nya (lihat gambar_google.py di
-// server). DigiKey tetap tautan tab baru terpisah - situs distributor itu
-// berbasis nomor part produsen, bukan gambar umum, jadi tidak cocok
-// dijadikan grid thumbnail.
+// halaman ini (tidak pernah otomatis tab baru), isinya widget pencarian
+// gambar Google (Programmable Search Engine) lewat iframe. TIDAK ADA API KEY
+// DI HALAMAN INI, TIDAK LEWAT SERVER SAMA SEKALI - lihat catatan lengkap di
+// CSE_CX & bukaModalGambar() lebih bawah soal kenapa arsitektur "server
+// proxy ke Custom Search JSON API" ditinggalkan (API itu sudah ditutup
+// Google untuk pendaftar baru). DigiKey tetap tautan tab baru terpisah -
+// situs distributor itu berbasis nomor part produsen, bukan gambar umum.
 //
 // Query diprioritaskan pakai MAKER + kode HASIL SCAN (Part Number E/C)
 // karena itu part yang barusan dipegang/discan operator. DigiKey beda (lihat
@@ -809,31 +808,46 @@ function perbaruiPencarianGambar(){
 });
 
 // =====================================================================
-//  POPUP "LIHAT GAMBAR" - SAMA PERSIS polanya dengan cari_lokasi.html:
-//  buka/tutup, minta PC yang mencari (lokal/MQTT), TIDAK ADA API KEY DI SINI.
+//  POPUP "LIHAT GAMBAR" - widget Google langsung lewat iframe, TIDAK ADA
+//  API KEY, TIDAK LEWAT SERVER SAMA SEKALI.
+//
+//  Sebelumnya fitur ini minta server (server.py/mqtt_subscriber.py) yang
+//  memanggil Custom Search JSON API. Itu ditinggalkan karena per kebijakan
+//  Google, Custom Search JSON API SUDAH DITUTUP untuk API key/project baru
+//  (lihat https://developers.google.com/custom-search/v1/overview - "closed
+//  to new customers"), jadi API key baru manapun tidak akan pernah bisa
+//  dapat akses walau semua langkah setup benar. Widget/hosted-page di bawah
+//  ini produk yang beda (Programmable Search Engine), gratis, dan tidak
+//  kena penutupan itu - cukup arahkan iframe ke cse.google.com dengan cx
+//  yang sudah dikonfigurasi.
 // =====================================================================
-function escapeHtml(s){
-  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-}
+const CSE_CX = '03b6fdbb0d8b94f07';   // Search Engine ID - BUKAN rahasia, aman ditaruh di HTML publik
 
-const modalGambar   = document.getElementById('modalGambar');
-const mgJudul       = document.getElementById('mgJudul');
-const mgKueri       = document.getElementById('mgKueri');
-const mgTutup       = document.getElementById('mgTutup');
-const mgStatus      = document.getElementById('mgStatus');
-const mgGrid        = document.getElementById('mgGrid');
-const mgCariLengkap = document.getElementById('mgCariLengkap');
+const modalGambar    = document.getElementById('modalGambar');
+const mgJudul         = document.getElementById('mgJudul');
+const mgKueri         = document.getElementById('mgKueri');
+const mgTutup         = document.getElementById('mgTutup');
+const mgFrame         = document.getElementById('mgFrame');
+const mgKataTempel    = document.getElementById('mgKataTempel');
+const mgCariLengkap  = document.getElementById('mgCariLengkap');
 
 function bukaModalGambar(query, judul){
   mgJudul.textContent = judul || 'Lihat gambar';
   mgKueri.textContent = 'kata kunci: ' + query;
+  mgKataTempel.textContent = query;
   mgCariLengkap.href = 'https://www.google.com/search?tbm=isch&q=' + encodeURIComponent(query);
+  // 'q' dipakai supaya widget LANGSUNG menampilkan hasil tanpa operator
+  // ketik apa pun. Kalau untuk alasan tertentu tidak auto-jalan, kata kunci
+  // yang sama sudah ditampilkan di mg-catatan (mgKataTempel) untuk ditempel
+  // manual ke kolom pencarian di dalam widget.
+  mgFrame.src = 'https://cse.google.com/cse?cx=' + encodeURIComponent(CSE_CX)
+              + '&q=' + encodeURIComponent(query);
   modalGambar.classList.add('show');
-  muatHasilGambar(query);
 }
 
 function tutupModalGambar(){
   modalGambar.classList.remove('show');
+  mgFrame.src = 'about:blank';   // hentikan widget di latar belakang saat popup ditutup
 }
 
 btnLihatGambar.addEventListener('click', () => {
@@ -847,78 +861,6 @@ modalGambar.addEventListener('click', (e) => { if (e.target === modalGambar) tut
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && modalGambar.classList.contains('show')) tutupModalGambar();
 });
-
-/* Minta PC yang mencari ke Google (lewat jalur LOKAL atau BROKER, mengikuti
-   `transport` yang sedang aktif). API key TIDAK PERNAH ada di sini - lihat
-   gambar_google.py di server. */
-let gambarReqId = null, gambarResolve = null, gambarReject = null, gambarTimer = null;
-
-function mintaCariGambarMqtt(query, timeoutMs){
-  timeoutMs = timeoutMs || 12000;
-  return new Promise((resolve, reject) => {
-    if (!mqttClient || !mqttClient.connected){
-      reject(new Error('Belum tersambung ke broker MQTT.'));
-      return;
-    }
-    gambarReqId = 'g' + Date.now() + Math.random().toString(16).slice(2, 8);
-    gambarResolve = resolve; gambarReject = reject;
-    gambarTimer = setTimeout(() => {
-      gambarResolve = null; gambarReject = null;
-      reject(new Error('Tidak ada jawaban dari PC dalam ' + (timeoutMs / 1000) + ' detik. Pastikan mqtt_subscriber.py sedang jalan.'));
-    }, timeoutMs);
-    mqttClient.publish(T_GAMBAR_REQ, JSON.stringify({ reqId: gambarReqId, q: query }), { qos: 1 });
-  });
-}
-
-function onGambarResult(data){
-  if (!gambarResolve || data.reqId !== gambarReqId) return;   // bukan jawaban punya kita (basi) - abaikan
-  clearTimeout(gambarTimer);
-  const res = gambarResolve, rej = gambarReject;
-  gambarResolve = null; gambarReject = null;
-  if (data.ok) res(data); else rej(new Error(data.error || 'gagal mencari gambar'));
-}
-
-async function mintaCariGambar(query){
-  if (transport === 'lokal'){
-    if (!apiBase && !(await cobaHealth(''))) throw new Error('Belum tersambung ke PC.');
-    const r = await fetchDenganBatasWaktu(apiBase + '/api/gambar?q=' + encodeURIComponent(query), {}, 12000);
-    const data = await r.json();
-    if (!data.ok) throw new Error(data.error || 'gagal mencari gambar');
-    return data.items || [];
-  }
-  const data = await mintaCariGambarMqtt(query);
-  return data.items || [];
-}
-
-function renderGridGambar(items, query){
-  if (!items.length){
-    mgStatus.textContent = 'Tidak ada hasil gambar untuk kata kunci ini.';
-    mgGrid.innerHTML = '';
-    return;
-  }
-  mgStatus.textContent = '';
-  mgGrid.innerHTML = items.map(it => {
-    const thumb = it.thumbnail || it.link;
-    const penuh = it.link || thumb;
-    return `<a class="mg-thumb" href="${escapeHtml(penuh)}" target="_blank" rel="noopener noreferrer"
-               title="${escapeHtml(it.title || '')}">
-              <img src="${escapeHtml(thumb)}" alt="${escapeHtml(it.title || query)}" loading="lazy">
-            </a>`;
-  }).join('');
-}
-
-async function muatHasilGambar(query){
-  mgGrid.innerHTML = '';
-  mgStatus.textContent = 'Mencari gambar...';
-  mgStatus.className = 'mg-status';
-  try{
-    const items = await mintaCariGambar(query);
-    renderGridGambar(items, query);
-  }catch(e){
-    mgStatus.textContent = 'Gagal mencari gambar: ' + e.message;
-    mgStatus.className = 'mg-status err';
-  }
-}
 
 function resetHasil(){
   masterRow = null;
@@ -1296,7 +1238,7 @@ function connectMqtt(){
     setDotState('broker');
     statusText.textContent = 'Terhubung ke broker MQTT';
     // Dengarkan balasan dari PC (hasil pencarian & konfirmasi simpan)
-    mqttClient.subscribe([T_LOOKUP_RES, T_SAVE_RES, T_GAMBAR_RES], { qos: 1 });
+    mqttClient.subscribe([T_LOOKUP_RES, T_SAVE_RES], { qos: 1 });
   });
 
   mqttClient.on('message', (topic, message) => {
@@ -1305,7 +1247,6 @@ function connectMqtt(){
     catch(e){ return; }
     if (topic === T_LOOKUP_RES) onLookupResult(data);
     else if (topic === T_SAVE_RES) onSaveResult(data);
-    else if (topic === T_GAMBAR_RES) onGambarResult(data);
   });
   mqttClient.on('reconnect', () => {
     setDotState('checking');
