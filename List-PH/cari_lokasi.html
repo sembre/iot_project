@@ -221,9 +221,52 @@
   #mqStatus.show{display:block}
   #mqStatus.ok{background:#052e1a;color:#4ade80;border:1px solid #14532d}
   #mqStatus.err{background:#3a0d0d;color:#fca5a5;border:1px solid #7f1d1d}
+
+  /* Modal "Menyambungkan..." - tampil OTOMATIS begitu halaman dibuka (class
+     "show" sudah ada di HTML-nya, bukan ditambahkan lewat JS), menutupi
+     SELURUH layar sampai jalur LOKAL atau BROKER benar-benar tersambung -
+     jadi semua tombol/input di belakangnya TIDAK BISA diklik selama status
+     koneksi masih "checking"/"off". Ditutup otomatis oleh perbaruiModalKoneksi()
+     begitu dot berubah jadi 'local' atau 'broker' (lihat JS) - TIDAK ada
+     tombol tutup manual, supaya operator tidak bisa "mengabaikan" belum
+     tersambung lalu bingung kenapa data tidak tersimpan.
+     Urutan koneksi TIDAK berubah dari sebelumnya: jalur LOKAL dicoba dulu
+     (instan, tanpa internet), baru fallback ke BROKER kalau lokal tidak
+     terjangkau - lihat deteksiJalur(). */
+  .modal-box-koneksi{
+    background:var(--card);border:1px solid var(--line);border-radius:14px;
+    padding:30px 24px;width:100%;max-width:300px;text-align:center;
+  }
+  .kk-spinner{
+    width:38px;height:38px;margin:0 auto 16px;border-radius:50%;
+    border:4px solid var(--line);border-top-color:var(--accent);
+    animation:kk-putar .8s linear infinite;
+  }
+  @keyframes kk-putar{ to{ transform:rotate(360deg); } }
+  .modal-box-koneksi h3{margin:0 0 8px;font-size:16px}
+  .modal-box-koneksi p{margin:0;font-size:13px;color:var(--muted);line-height:1.6}
+  #kkAksi{margin-top:16px;display:none}
+  #kkAksi button{
+    padding:9px 18px;border-radius:8px;border:1px solid var(--line);
+    background:transparent;color:var(--text);font-size:13px;font-weight:600;cursor:pointer;
+  }
 </style>
 </head>
 <body>
+
+<!-- Modal "Menyambungkan..." - lihat catatan panjang di CSS .modal-box-koneksi.
+     Muncul otomatis (class "show" sudah ada di sini) sampai perbaruiModalKoneksi()
+     di JS menutupnya begitu jalur LOKAL/BROKER tersambung. -->
+<div class="modal-overlay show" id="modalKoneksi">
+  <div class="modal-box-koneksi">
+    <div class="kk-spinner"></div>
+    <h3>Menyambungkan...</h3>
+    <p id="kkStatus">Mengecek koneksi ke PC...</p>
+    <div id="kkAksi">
+      <button type="button" id="kkCobaLagi">Coba lagi</button>
+    </div>
+  </div>
+</div>
 
 <a class="nav-dashboard" href="index.html"><span class="ico">🏠</span> Dashboard</a>
 <h1>🔍 Cari Lokasi Rak</h1>
@@ -345,6 +388,37 @@ const statusText = document.getElementById('statusText');
 function setDotState(state){
   dot.className = 'dot ' + state;
 }
+
+// ============ MODAL "MENYAMBUNGKAN..." - blokir semua fungsi sampai
+// jalur LOKAL/BROKER benar-benar tersambung ============
+// SENGAJA tidak menyisipkan kode di setiap tempat status berubah (dot/
+// statusText sudah dipakai di banyak fungsi - rawan lewat satu tempat lalu
+// modal ini tidak sinkron). Sebagai gantinya, dua MutationObserver di bawah
+// MENGAMATI dot & statusText yang SUDAH ada, jadi modal ini otomatis ikut
+// setiap perubahan status koneksi tanpa mengubah logika koneksi itu sendiri.
+const modalKoneksi = document.getElementById('modalKoneksi');
+const kkStatus = document.getElementById('kkStatus');
+const kkAksi = document.getElementById('kkAksi');
+const kkCobaLagi = document.getElementById('kkCobaLagi');
+
+function perbaruiModalKoneksi(){
+  const tersambung = dot.classList.contains('local') || dot.classList.contains('broker');
+  modalKoneksi.classList.toggle('show', !tersambung);
+  kkStatus.textContent = statusText.textContent;
+  // "Coba lagi" baru muncul kalau statusnya benar2 GAGAL (dot merah/off),
+  // bukan saat masih "checking" (abu) - supaya tidak menggoda diklik padahal
+  // masih wajar menunggu jawaban PC/broker.
+  kkAksi.style.display = dot.classList.contains('off') ? 'block' : 'none';
+}
+new MutationObserver(perbaruiModalKoneksi).observe(dot, { attributes: true, attributeFilter: ['class'] });
+new MutationObserver(perbaruiModalKoneksi).observe(statusText, { childList: true, characterData: true, subtree: true });
+perbaruiModalKoneksi();
+
+kkCobaLagi.addEventListener('click', () => {
+  mqttBrokerIdx = 0;   // ulang dari broker PERTAMA di daftar, bukan lanjut dari yang gagal terakhir
+  deteksiJalur();
+});
+
 const barisAlamat = document.getElementById('barisAlamat');
 const inputAlamat = document.getElementById('inputAlamat');
 const btnAlamat = document.getElementById('btnAlamat');

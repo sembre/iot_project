@@ -169,9 +169,44 @@
     width:100%;height:58vh;min-height:320px;border-radius:10px;
     border:1px solid var(--line);background:#fff;
   }
+
+  /* Modal "Menyambungkan..." - lihat catatan panjang di cari_lokasi.html
+     (file sumber pola ini). Tampil OTOMATIS begitu halaman dibuka, menutupi
+     SELURUH layar (termasuk kamera) sampai jalur LOKAL/BROKER tersambung -
+     scan QR TIDAK berguna dikirim kalau belum ada jalur ke PC sama sekali. */
+  .modal-box-koneksi{
+    background:var(--card);border:1px solid var(--line);border-radius:14px;
+    padding:30px 24px;width:100%;max-width:300px;text-align:center;
+  }
+  .kk-spinner{
+    width:38px;height:38px;margin:0 auto 16px;border-radius:50%;
+    border:4px solid var(--line);border-top-color:var(--accent);
+    animation:kk-putar .8s linear infinite;
+  }
+  @keyframes kk-putar{ to{ transform:rotate(360deg); } }
+  .modal-box-koneksi h3{margin:0 0 8px;font-size:16px}
+  .modal-box-koneksi p{margin:0;font-size:13px;color:var(--muted);line-height:1.6}
+  #kkAksi{margin-top:16px;display:none}
+  #kkAksi button{
+    padding:9px 18px;border-radius:8px;border:1px solid var(--line);
+    background:transparent;color:var(--text);font-size:13px;font-weight:600;cursor:pointer;
+  }
 </style>
 </head>
 <body>
+
+<!-- Modal "Menyambungkan..." - lihat catatan panjang di CSS .modal-box-koneksi
+     dan di cari_lokasi.html (file sumber pola ini). -->
+<div class="modal-overlay show" id="modalKoneksi">
+  <div class="modal-box-koneksi">
+    <div class="kk-spinner"></div>
+    <h3>Menyambungkan...</h3>
+    <p id="kkStatus">Mengecek koneksi ke PC...</p>
+    <div id="kkAksi">
+      <button type="button" id="kkCobaLagi">Coba lagi</button>
+    </div>
+  </div>
+</div>
 
 <a class="nav-dashboard" href="index.html"><span class="ico">🏠</span> Dashboard</a>
 <h1>&#128241; Scan QR &rarr; Excel (list poshheader.xlsm)</h1>
@@ -423,6 +458,33 @@ const statusText = document.getElementById('statusText');
 function setDotState(state){
   dot.className = 'dot ' + state;
 }
+
+// ============ MODAL "MENYAMBUNGKAN..." - blokir semua fungsi (termasuk
+// kirim hasil scan) sampai jalur LOKAL/BROKER benar-benar tersambung ============
+// SAMA persis polanya dengan cari_lokasi.html: MutationObserver mengamati
+// dot & statusText yang SUDAH ada, bukan menyisipkan kode di setiap tempat
+// status berubah - supaya modal ini otomatis ikut tanpa mengubah logika
+// koneksi itu sendiri.
+const modalKoneksi = document.getElementById('modalKoneksi');
+const kkStatus = document.getElementById('kkStatus');
+const kkAksi = document.getElementById('kkAksi');
+const kkCobaLagi = document.getElementById('kkCobaLagi');
+
+function perbaruiModalKoneksi(){
+  const tersambung = dot.classList.contains('local') || dot.classList.contains('broker');
+  modalKoneksi.classList.toggle('show', !tersambung);
+  kkStatus.textContent = statusText.textContent;
+  kkAksi.style.display = dot.classList.contains('off') ? 'block' : 'none';
+}
+new MutationObserver(perbaruiModalKoneksi).observe(dot, { attributes: true, attributeFilter: ['class'] });
+new MutationObserver(perbaruiModalKoneksi).observe(statusText, { childList: true, characterData: true, subtree: true });
+perbaruiModalKoneksi();
+
+kkCobaLagi.addEventListener('click', () => {
+  mqttBrokerIdx = 0;
+  deteksiJalur();
+});
+
 const scanMsg = document.getElementById('scanMsg');
 const btnJalur = document.getElementById('btnJalur');
 const barisAlamat = document.getElementById('barisAlamat');
