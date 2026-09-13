@@ -211,6 +211,8 @@
             color:var(--text);font-size:18px;line-height:1;padding:6px 10px;cursor:pointer;flex-shrink:0}
   .mg-catatan{font-size:12px;color:var(--muted);margin-top:12px;line-height:1.6}
   .mg-catatan a{color:#93c5fd;cursor:pointer}
+  .mg-bawah{width:100%;margin-top:12px;padding:12px;border:none;border-radius:10px;
+            font-size:14px;font-weight:600;cursor:pointer;background:#334155;color:var(--text)}
   #mgFrame{
     width:100%;height:58vh;min-height:320px;border-radius:10px;
     border:1px solid var(--line);background:#fff;
@@ -377,6 +379,7 @@ Ketemu barisnya? Qty-nya bisa langsung diubah dari sini juga.</p>
       Kalau kotak di atas kosong/lama memuat -
       <a id="mgTabBaru" target="_blank" rel="noopener noreferrer">buka di tab baru (layar penuh)</a>.
     </div>
+    <button type="button" class="mg-bawah" id="mgTutupBawah">Tutup</button>
   </div>
 </div>
 
@@ -753,6 +756,7 @@ const mgKueri      = document.getElementById('mgKueri');
 const mgTutup      = document.getElementById('mgTutup');
 const mgFrame      = document.getElementById('mgFrame');
 const mgTabBaru    = document.getElementById('mgTabBaru');
+const mgTutupBawah = document.getElementById('mgTutupBawah');
 
 function bukaModalGambar(kode, maker, labelKolom){
   const query = queryGambar(kode, maker);
@@ -770,6 +774,7 @@ function tutupModalGambar(){
 }
 
 mgTutup.addEventListener('click', tutupModalGambar);
+mgTutupBawah.addEventListener('click', tutupModalGambar);
 modalGambar.addEventListener('click', (e) => { if (e.target === modalGambar) tutupModalGambar(); });
 
 // Peta nama maker -> kata yang benar-benar dipakai mencari gambar.
