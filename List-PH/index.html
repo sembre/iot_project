@@ -22,15 +22,15 @@
   .grid{display:grid;grid-template-columns:1fr;gap:14px}
   @media (min-width:520px){ .grid{grid-template-columns:1fr 1fr} }
 
-  a.tile{
+  .tile{
     display:flex;flex-direction:column;gap:8px;
     background:var(--card);border:1px solid var(--line);border-radius:16px;
     padding:20px;text-decoration:none;color:var(--text);
     transition:transform .12s ease, border-color .12s ease, background .12s ease;
   }
-  a.tile:active{transform:scale(.98);background:var(--card2)}
+  .tile:active{transform:scale(.98);background:var(--card2)}
   @media (hover:hover){
-    a.tile:hover{border-color:var(--accent);background:var(--card2)}
+    .tile:hover{border-color:var(--accent);background:var(--card2)}
   }
   .tile .icon{font-size:30px;line-height:1}
   .tile .judul{font-size:16px;font-weight:700}
@@ -47,6 +47,81 @@
   }
   .info b{color:var(--text)}
   .info code{background:#0b1220;padding:1px 6px;border-radius:5px;color:#7dd3fc;font-size:11.5px}
+
+  /* Kartu "Riwayat Scan" - satu-satunya tile yang BUKAN tautan (<a>), tapi
+     tombol yang membuka/menutup panel History di bawahnya di HALAMAN INI
+     juga (tidak pindah halaman) - lihat #panelRiwayat & JS di bawah. Reset
+     gaya <button> supaya kelihatan identik dengan tile <a> yang lain. */
+  button.tile{
+    appearance:none;-webkit-appearance:none;margin:0;font-family:inherit;
+    font-size:inherit;text-align:left;width:100%;cursor:pointer;
+  }
+  .tile .baris-judul{display:flex;align-items:center;justify-content:space-between;gap:8px}
+  .tile .panah{color:var(--muted);font-size:13px;transition:transform .15s ease}
+  button.tile[aria-expanded="true"] .panah{transform:rotate(180deg)}
+  button.tile[aria-expanded="true"]{border-color:var(--accent)}
+
+  /* ---------- Panel "Riwayat Scan" (data sheet DataScan, lihat mqtt_subscriber.py
+     & server.py endpoint /api/riwayat) - dibuka/ditutup, TIDAK pindah halaman.
+     Perlu koneksi ke PC (LOKAL kalau satu WiFi, kalau tidak lewat BROKER MQTT
+     sama seperti scan.html/cari_lokasi.html) - dimuat MALAS (baru dicoba
+     tersambung begitu tombol tile di atas pertama kali diklik), supaya
+     halaman dashboard ini tidak diam-diam mencoba konek broker padahal
+     usernya cuma mau ke salah satu menu lain. ---------- */
+  .panel-riwayat{
+    margin-top:14px;background:var(--card);border:1px solid var(--line);border-radius:16px;
+    padding:16px;
+  }
+  .pr-status{
+    display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--muted);
+    padding:8px 10px;background:var(--card2);border-radius:10px;margin-bottom:12px;
+  }
+  .pr-status .pr-dot{
+    width:9px;height:9px;border-radius:50%;background:#64748b;flex-shrink:0;
+  }
+  .pr-status.ok .pr-dot{background:var(--accent)}
+  .pr-status.err .pr-dot{background:#ef4444}
+  .pr-status.checking .pr-dot{animation:pr-kedip 1s ease-in-out infinite}
+  @keyframes pr-kedip{ 50%{opacity:.3} }
+  .pr-status button{
+    margin-left:auto;background:transparent;border:1px solid var(--line);color:var(--text);
+    font-size:11.5px;font-weight:600;padding:5px 10px;border-radius:8px;cursor:pointer;flex-shrink:0;
+  }
+
+  .pr-kosong{font-size:13px;color:var(--muted);text-align:center;padding:18px 8px}
+
+  .pr-item{
+    background:var(--card2);border:1px solid var(--line);border-radius:12px;
+    padding:12px 14px;margin-bottom:10px;font-size:13px;line-height:1.55;
+  }
+  .pr-item:last-child{margin-bottom:0}
+  .pr-baris1{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:4px}
+  .pr-waktu{color:var(--muted);font-size:11.5px}
+  .pr-aksi{
+    font-size:10.5px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;
+    padding:2px 8px;border-radius:999px;flex-shrink:0;
+  }
+  .pr-aksi.set{color:#7dd3fc;background:#0c4a6e}
+  .pr-aksi.add{color:var(--accent);background:#052e1a}
+  .pr-aksi.sub{color:#fca5a5;background:#450a0a}
+  .pr-aksi.edit{color:#fbbf24;background:#451a03}
+  .pr-part{font-weight:700}
+  .pr-sub{color:var(--muted);font-size:12px;margin-top:2px}
+  .pr-qty{font-weight:600}
+  .pr-ket{color:var(--muted);font-size:11.5px;margin-top:4px;font-style:italic}
+
+  /* [hidden] HARUS eksplisit: rule display:flex di bawah kalau tidak
+     ditumpuk begini akan MENGALAHKAN atribut hidden (spesifisitasnya
+     sama-sama satu class/attribute selector, dan punya CSS penulis ini
+     datang belakangan di stylesheet daripada aturan bawaan browser). */
+  .pr-paging{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:12px}
+  .pr-paging[hidden]{display:none}
+  .pr-paging button{
+    background:#334155;color:var(--text);border:none;border-radius:9px;
+    padding:9px 14px;font-size:12.5px;font-weight:600;cursor:pointer;flex-shrink:0;
+  }
+  .pr-paging button:disabled{opacity:.4;cursor:not-allowed}
+  .pr-paging span{font-size:12px;color:var(--muted);text-align:center}
 </style>
 </head>
 <body>
@@ -83,6 +158,35 @@
       <span class="desc">Tempel banyak part number sekaligus (satu baris satu part), generate semua QR-nya lalu print/simpan PDF dari browser.</span>
       <span class="tag">Massal</span>
     </a>
+
+    <button type="button" class="tile" id="btnRiwayat" aria-expanded="false" aria-controls="panelRiwayat">
+      <span class="baris-judul">
+        <span class="icon">🕘</span>
+        <span class="panah">&#9660;</span>
+      </span>
+      <span class="judul">Riwayat Scan</span>
+      <span class="desc">Log semua kegiatan scan dari sheet DataScan - yang terbaru di paling atas, bisa dibuka halaman per halaman.</span>
+      <span class="tag">Log aktivitas</span>
+    </button>
+  </div>
+
+  <!-- Panel History - tersembunyi sampai tombol tile "Riwayat Scan" di atas
+       diklik pertama kali (lihat bukaTutupRiwayat() di JS). Konektivitas
+       (LOKAL dulu, baru BROKER MQTT kalau LOKAL tidak terjangkau) memakai
+       pola SAMA PERSIS dengan cari_lokasi.html/scan.html supaya PC yang
+       sama melayani semua halaman - lihat catatan panjang di JS bawah. -->
+  <div class="panel-riwayat" id="panelRiwayat" hidden>
+    <div class="pr-status checking" id="prStatus">
+      <span class="pr-dot"></span>
+      <span id="prStatusTeks">Menyambungkan...</span>
+      <button type="button" id="prCobaLagi" hidden>Coba lagi</button>
+    </div>
+    <div id="prList"></div>
+    <div class="pr-paging" id="prPaging" hidden>
+      <button type="button" id="prPrev">&lsaquo; Sebelumnya</button>
+      <span id="prInfo">Halaman 1 / 1</span>
+      <button type="button" id="prNext">Berikutnya &rsaquo;</button>
+    </div>
   </div>
 
   <div class="info">
@@ -92,5 +196,289 @@
   </div>
 
 </div>
+
+<script>
+// ============================================================================
+// Panel "Riwayat Scan" - baca sheet DataScan (lihat excel_writer.py:
+// riwayat_list()) lewat /api/riwayat (LOKAL) atau topic .../riwayat/req
+// (BROKER MQTT). Konektivitas dimuat MALAS: baru dicoba begitu tombol
+// tile "Riwayat Scan" pertama kali dibuka, supaya dashboard ini tidak
+// diam-diam menyambung ke broker kalau usernya cuma mau ke menu lain.
+//
+// Polanya SAMA PERSIS dengan cari_lokasi.html/scan.html/buat_label_manual.html
+// (apiBase/deteksiJalur/connectMqtt/mqttRequest) supaya satu PC yang sama
+// (satu mqtt_subscriber.py atau satu server.py) melayani SEMUA halaman -
+// TIDAK BOLEH beda urutan broker/topic dari file-file itu.
+// ============================================================================
+const btnRiwayat   = document.getElementById('btnRiwayat');
+const panelRiwayat = document.getElementById('panelRiwayat');
+const prStatus     = document.getElementById('prStatus');
+const prStatusTeks = document.getElementById('prStatusTeks');
+const prCobaLagi   = document.getElementById('prCobaLagi');
+const prList       = document.getElementById('prList');
+const prPaging     = document.getElementById('prPaging');
+const prPrev       = document.getElementById('prPrev');
+const prNext       = document.getElementById('prNext');
+const prInfo       = document.getElementById('prInfo');
+
+const PER_HALAMAN = 15;
+let halamanSaatIni = 1;
+let panelDibuka = false;
+let sudahCobaSambung = false;
+
+let transport = null;      // 'lokal' | 'mqtt' - null = belum dicek
+let apiBase = '';
+const PORT_HTTP_PC = 5001;
+
+function setPrStatus(kelas, teks, tombolCobaLagi){
+  prStatus.className = 'pr-status ' + kelas;
+  prStatusTeks.textContent = teks;
+  prCobaLagi.hidden = !tombolCobaLagi;
+}
+
+async function cobaHealth(base){
+  try{
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 2500);
+    const r = await fetch(base + '/api/health', { cache: 'no-store', signal: ctrl.signal });
+    clearTimeout(t);
+    return r.ok;
+  }catch(e){ return false; }
+}
+
+async function deteksiJalur(){
+  setPrStatus('checking', 'Mengecek koneksi ke PC...', false);
+  if (await cobaHealth('')){ apiBase = ''; transport = 'lokal'; return true; }
+  const simpan = (localStorage.getItem('alamatPC') || '').trim();
+  if (simpan){
+    const base = 'http://' + simpan + ':' + PORT_HTTP_PC;
+    if (await cobaHealth(base)){ apiBase = base; transport = 'lokal'; return true; }
+  }
+  apiBase = '';
+  // Alamat PC belum pernah diisi di halaman lain - LOKAL tidak mungkin dicoba,
+  // langsung ke broker daripada menunggu percuma.
+  return await coba_mqtt();
+}
+
+function loadScript(src, onload, onerror){
+  const s = document.createElement('script');
+  s.src = src; s.onload = onload; s.onerror = onerror;
+  document.head.appendChild(s);
+}
+
+// HARUS SAMA PERSIS urutannya dengan DAFTAR_BROKER di mqtt_subscriber.py
+// (PC) dan dengan cari_lokasi.html/scan.html/buat_label_manual.html (HP),
+// supaya semuanya berakhir tersambung ke broker yang SAMA.
+const DAFTAR_BROKER_URL = [
+  'wss://test.mosquitto.org:8081/mqtt',
+  'wss://broker.emqx.io:8084/mqtt',
+];
+let mqttBrokerIdx = 0;
+const MQTT_TOPIC = 'poshheader/qrscan/883f4243';
+const T_RIWAYAT_REQ = MQTT_TOPIC + '/riwayat/req';
+const T_RIWAYAT_RES = MQTT_TOPIC + '/riwayat/res';
+
+let mqttClient = null;
+let mqttEverConnected = false;
+const menungguRespons = new Map();
+
+function loadMqttLib(onready){
+  if (typeof mqtt !== 'undefined'){ onready(); return; }
+  loadScript('mqtt.lib.js', onready, () => {
+    loadScript('https://cdn.jsdelivr.net/npm/mqtt@5.15.2/dist/mqtt.min.js', onready, () => {
+      setPrStatus('err', 'Gagal memuat library MQTT (lokal & CDN).', true);
+    });
+  });
+}
+
+function coba_mqtt(){
+  return new Promise((resolve) => {
+    loadMqttLib(() => {
+      transport = 'mqtt';
+      connectMqtt(resolve);
+    });
+  });
+}
+
+function connectMqtt(onSelesai){
+  if (mqttClient){ if (onSelesai) onSelesai(mqttEverConnected); return; }
+  const alamatBroker = DAFTAR_BROKER_URL[mqttBrokerIdx];
+  setPrStatus('checking', `Menghubungkan ke broker MQTT (${mqttBrokerIdx + 1}/${DAFTAR_BROKER_URL.length})...`, false);
+  try{
+    mqttClient = mqtt.connect(alamatBroker, {
+      clientId: 'riwayat-' + Math.random().toString(16).slice(2, 10),
+      reconnectPeriod: 3000, connectTimeout: 8000, clean: true,
+    });
+  }catch(err){
+    setPrStatus('err', 'Gagal inisialisasi MQTT: ' + err.message, true);
+    if (onSelesai) onSelesai(false);
+    return;
+  }
+
+  let sudahLapor = false;
+  const lapor = (ok) => { if (!sudahLapor && onSelesai){ sudahLapor = true; onSelesai(ok); } };
+
+  mqttClient.on('connect', () => {
+    mqttEverConnected = true;
+    setPrStatus('ok', 'Terhubung ke broker MQTT', false);
+    mqttClient.subscribe([T_RIWAYAT_RES], { qos: 1 });
+    lapor(true);
+  });
+  mqttClient.on('message', (topic, message) => {
+    let data;
+    try{ data = JSON.parse(message.toString()); }catch(e){ return; }
+    const p = menungguRespons.get(data.reqId);
+    if (!p) return;
+    menungguRespons.delete(data.reqId);
+    clearTimeout(p.timer);
+    if (data.ok) p.resolve(data); else p.reject(new Error(data.error || 'tidak diketahui'));
+  });
+  mqttClient.on('reconnect', () => { if (transport === 'mqtt') setPrStatus('checking', 'Menyambung ulang ke broker...', false); });
+  mqttClient.on('close', () => { if (transport === 'mqtt') setPrStatus('err', 'Terputus dari broker', true); });
+  mqttClient.on('error', (err) => {
+    if (transport === 'mqtt') setPrStatus('err', 'Error MQTT: ' + (err && err.message ? err.message : err), true);
+  });
+
+  setTimeout(() => {
+    if (mqttEverConnected) return;
+    if (mqttBrokerIdx + 1 < DAFTAR_BROKER_URL.length){
+      mqttBrokerIdx++;
+      try{ mqttClient.end(true); }catch(e){}
+      mqttClient = null;
+      connectMqtt(onSelesai);
+    } else {
+      setPrStatus('err', 'Semua broker gagal dihubungi (jaringan mungkin memblokir port MQTT).', true);
+      lapor(false);
+    }
+  }, 9000);
+}
+
+function mqttRequest(topicReq, payload, timeoutMs){
+  timeoutMs = timeoutMs || 10000;
+  return new Promise((resolve, reject) => {
+    if (!mqttClient || !mqttClient.connected){
+      reject(new Error('Belum tersambung ke broker MQTT.'));
+      return;
+    }
+    const reqId = 'r' + Date.now() + Math.random().toString(16).slice(2, 6);
+    const timer = setTimeout(() => {
+      menungguRespons.delete(reqId);
+      reject(new Error('Tidak ada jawaban dari PC dalam ' + (timeoutMs/1000) + ' detik.'));
+    }, timeoutMs);
+    menungguRespons.set(reqId, { resolve, reject, timer });
+    mqttClient.publish(topicReq, JSON.stringify(Object.assign({ reqId }, payload)), { qos: 1 }, (err) => {
+      if (err){ clearTimeout(timer); menungguRespons.delete(reqId); reject(err); }
+    });
+  });
+}
+
+function escapeHtml(s){
+  return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => (
+    { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+  ));
+}
+
+function labelAksi(aksi){
+  const a = (aksi || '').toLowerCase();
+  if (a === 'add') return { kelas: 'add', teks: 'TAMBAH +' };
+  if (a === 'sub') return { kelas: 'sub', teks: 'KURANGI −' };
+  if (a === 'edit') return { kelas: 'edit', teks: 'UBAH PART' };
+  return { kelas: 'set', teks: 'GANTI JADI' };
+}
+
+function renderItem(it){
+  const ax = labelAksi(it.aksi);
+  const qtyBaris = (it.aksi || '').toLowerCase() === 'edit'
+    ? ''
+    : `<div class="pr-sub">Qty: <span class="pr-qty">${escapeHtml(it.qtyLama)}</span> &rarr; <span class="pr-qty">${escapeHtml(it.qtyBaru)}</span> (rak ${escapeHtml(it.lokasi || '-')})</div>`;
+  const ket = (it.status || it.keterangan)
+    ? `<div class="pr-ket">${escapeHtml([it.status, it.keterangan].filter(Boolean).join(' - '))}</div>`
+    : '';
+  return `
+    <div class="pr-item">
+      <div class="pr-baris1">
+        <span class="pr-waktu">${escapeHtml(it.tanggal)} ${escapeHtml(it.waktu)} &middot; ${escapeHtml(it.perangkat || '-')}</span>
+        <span class="pr-aksi ${ax.kelas}">${ax.teks}</span>
+      </div>
+      <div class="pr-part">${escapeHtml(it.partEc || '-')}</div>
+      <div class="pr-sub">${escapeHtml(it.klasifikasi || '-')}${it.maker ? ' · ' + escapeHtml(it.maker) : ''}${it.partHarness ? ' · ' + escapeHtml(it.partHarness) : ''}</div>
+      ${qtyBaris}
+      ${ket}
+    </div>`;
+}
+
+async function ambilRiwayat(halaman){
+  if (transport === 'lokal'){
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 15000);
+    try{
+      const r = await fetch(apiBase + `/api/riwayat?halaman=${halaman}&perHalaman=${PER_HALAMAN}`,
+        { cache: 'no-store', signal: ctrl.signal });
+      return await r.json();
+    } finally { clearTimeout(t); }
+  }
+  if (!mqttClient || !mqttClient.connected){
+    throw new Error('Belum tersambung ke broker MQTT.');
+  }
+  return await mqttRequest(T_RIWAYAT_REQ, { halaman, perHalaman: PER_HALAMAN });
+}
+
+async function muatHalaman(halaman){
+  prList.innerHTML = '<div class="pr-kosong">Memuat riwayat...</div>';
+  prPaging.hidden = true;
+  try{
+    const data = await ambilRiwayat(halaman);
+    if (!data.ok) throw new Error(data.error || 'gagal memuat riwayat');
+    halamanSaatIni = data.halaman;
+
+    if (!data.items.length){
+      prList.innerHTML = '<div class="pr-kosong">Belum ada riwayat scan tercatat di DataScan.</div>';
+    } else {
+      prList.innerHTML = data.items.map(renderItem).join('');
+    }
+
+    prInfo.textContent = `Halaman ${data.halaman} / ${data.totalHalaman} (${data.total} baris)`;
+    prPrev.disabled = data.halaman <= 1;
+    prNext.disabled = data.halaman >= data.totalHalaman;
+    prPaging.hidden = false;
+    setPrStatus('ok', transport === 'lokal'
+      ? 'Jalur LOKAL — langsung ke PC'
+      : 'Terhubung ke broker MQTT', false);
+  }catch(e){
+    prList.innerHTML = '';
+    setPrStatus('err', 'Gagal memuat riwayat: ' + e.message, true);
+  }
+}
+
+prPrev.addEventListener('click', () => { if (halamanSaatIni > 1) muatHalaman(halamanSaatIni - 1); });
+prNext.addEventListener('click', () => muatHalaman(halamanSaatIni + 1));
+
+async function sambungkanLaluMuat(){
+  sudahCobaSambung = true;
+  const ok = await deteksiJalur();
+  if (ok){
+    await muatHalaman(1);
+  }
+  // Kalau gagal total, deteksiJalur()/connectMqtt() sudah menuliskan status
+  // errornya sendiri (lihat setPrStatus('err', ..., true) di berbagai tempat).
+}
+
+prCobaLagi.addEventListener('click', () => {
+  mqttBrokerIdx = 0;
+  mqttEverConnected = false;
+  if (mqttClient){ try{ mqttClient.end(true); }catch(e){} mqttClient = null; }
+  sambungkanLaluMuat();
+});
+
+function bukaTutupRiwayat(){
+  panelDibuka = !panelDibuka;
+  panelRiwayat.hidden = !panelDibuka;
+  btnRiwayat.setAttribute('aria-expanded', panelDibuka ? 'true' : 'false');
+  if (panelDibuka && !sudahCobaSambung){
+    sambungkanLaluMuat();
+  }
+}
+btnRiwayat.addEventListener('click', bukaTutupRiwayat);
+</script>
 </body>
 </html>
