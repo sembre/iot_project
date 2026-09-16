@@ -331,14 +331,16 @@ Ketemu barisnya? Qty-nya bisa langsung diubah dari sini juga.</p>
   </div>
 </div>
 
-<!-- ================== POPUP UBAH NOMOR PART ================== -->
+<!-- ================== POPUP UBAH DATA BARIS (No Rak / Nomor Part) ================== -->
 <div class="modal-overlay" id="modalPart">
   <div class="modal-box">
-    <h3>✏️ Ubah Nomor Part</h3>
+    <h3>✏️ Ubah Data Baris</h3>
     <div class="modal-info">
-      <div class="baris"><span>No Rak</span><b id="mpRak">-</b></div>
       <div class="baris"><span>Baris List-PH</span><b id="mpRow">-</b></div>
     </div>
+
+    <label for="mpRak">No Rak / Lokasi Rak</label>
+    <input type="text" id="mpRak" autocomplete="off" autocapitalize="characters" spellcheck="false">
 
     <label for="mpPartEc">Part No. E/C</label>
     <input type="text" id="mpPartEc" autocomplete="off" autocapitalize="characters" spellcheck="false">
@@ -349,8 +351,8 @@ Ketemu barisnya? Qty-nya bisa langsung diubah dari sini juga.</p>
     <div class="mp-preview" id="mpPreview"></div>
 
     <div class="mp-catatan">
-      Label untuk nomor yang berubah otomatis ditambahkan ke
-      <b>Buat Label</b>, jadi tinggal dicetak.
+      Label untuk nomor part yang berubah, atau untuk No Rak yang pindah,
+      otomatis ditambahkan ke <b>Buat Label</b>, jadi tinggal dicetak.
     </div>
 
     <div id="mpStatus"></div>
@@ -853,7 +855,8 @@ function renderItem(it, kunci){
       <div class="baris-atas">
         <div>
           <span class="rak-label">No Rak / Lokasi Rak</span>
-          <span class="rak">${escapeHtml(it.lokasi || '-')}</span>
+          <span class="rak">${escapeHtml(it.lokasi || '-')}<button type="button" class="btn-pensil" data-row="${it.row}" data-kolom="lokasi"
+                    title="Ubah No Rak / Lokasi Rak">✏️</button></span>
         </div>
         ${labelBadge(jenis)}
       </div>
@@ -1108,7 +1111,7 @@ function bukaModalPart(row, fokusKolom){
   if (!it) return;
   itemPart = it;
 
-  mpRak.textContent = it.lokasi || '-';
+  mpRak.value     = it.lokasi || '';
   mpRow.textContent = String(it.row);
   mpPartEc.value  = it.partEc || '';
   mpHarness.value = it.partHarness || '';
@@ -1121,7 +1124,9 @@ function bukaModalPart(row, fokusKolom){
   modalPart.classList.add('show');
   // Fokuskan ke kolom yang pensilnya diklik - orang mengklik pensil di baris
   // tertentu karena memang itu yang mau diubah.
-  const target = (fokusKolom === 'partHarness') ? mpHarness : mpPartEc;
+  const target = (fokusKolom === 'partHarness') ? mpHarness
+               : (fokusKolom === 'lokasi') ? mpRak
+               : mpPartEc;
   target.focus();
   target.select();
 }
@@ -1133,12 +1138,18 @@ function tutupModalPart(){
 
 function updatePreviewMp(){
   if (!itemPart) return;
+  const rakLama = itemPart.lokasi || '';
   const ecLama = itemPart.partEc || '';
   const hLama  = itemPart.partHarness || '';
+  const rakBaru = mpRak.value.trim();
   const ecBaru = mpPartEc.value.trim();
   const hBaru  = mpHarness.value.trim();
 
   const baris = [];
+  if (rakBaru !== rakLama){
+    baris.push('No Rak: <span class="dari">' + escapeHtml(rakLama || '(kosong)') +
+               '</span> → <span class="jadi">' + escapeHtml(rakBaru || '(kosong)') + '</span>');
+  }
   if (ecBaru !== ecLama){
     baris.push('Part No. E/C: <span class="dari">' + escapeHtml(ecLama || '(kosong)') +
                '</span> → <span class="jadi">' + escapeHtml(ecBaru || '(kosong)') + '</span>');
@@ -1152,13 +1163,14 @@ function updatePreviewMp(){
     : '<span class="tak-berubah">Belum ada yang diubah.</span>';
 }
 
+mpRak.addEventListener('input', updatePreviewMp);
 mpPartEc.addEventListener('input', updatePreviewMp);
 mpHarness.addEventListener('input', updatePreviewMp);
 mpBatal.addEventListener('click', tutupModalPart);
 modalPart.addEventListener('click', (e) => { if (e.target === modalPart) tutupModalPart(); });
 
 // Enter di kolom teks = simpan (kebiasaan wajar di form pendek seperti ini)
-[mpPartEc, mpHarness].forEach(el => {
+[mpRak, mpPartEc, mpHarness].forEach(el => {
   el.addEventListener('keydown', (e) => { if (e.key === 'Enter') simpanPart(); });
 });
 
@@ -1202,8 +1214,10 @@ async function tambahLabelCetak(rak, part){
 
 async function simpanPart(){
   if (!itemPart) return;
+  const rakLama = itemPart.lokasi || '';
   const ecLama = itemPart.partEc || '';
   const hLama  = itemPart.partHarness || '';
+  const rakBaru = mpRak.value.trim();
   const ecBaru = mpPartEc.value.trim();
   const hBaru  = mpHarness.value.trim();
 
@@ -1212,7 +1226,7 @@ async function simpanPart(){
     mpPartEc.focus();
     return;
   }
-  if (ecBaru === ecLama && hBaru === hLama){
+  if (rakBaru === rakLama && ecBaru === ecLama && hBaru === hLama){
     tampilkanStatusMp('Tidak ada yang diubah.', 'info');
     return;
   }
@@ -1224,36 +1238,41 @@ async function simpanPart(){
   try{
     const hasil = await kirimEditPart({
       row: itemPart.row,
-      // Kirim HANYA kolom yang benar-benar berubah. Mengirim keduanya terus
+      // Kirim HANYA kolom yang benar-benar berubah. Mengirim semuanya terus
       // membuat riwayat penuh "perubahan" yang sebenarnya tidak terjadi.
+      lokasi:      rakBaru !== rakLama ? rakBaru : undefined,
       partEc:      ecBaru !== ecLama ? ecBaru : undefined,
       partHarness: hBaru  !== hLama  ? hBaru  : undefined,
       expectPartEc: ecLama,     // pengaman: baris harus masih berisi nilai ini
       perangkat: 'Cari Lokasi (Ubah Part)',
     });
 
-    // ---- Label otomatis untuk nomor yang BARU ----
-    // Nomor part di rak berubah berarti label fisiknya sudah tidak cocok lagi,
-    // jadi penggantinya langsung dimasukkan ke antrean cetak. Dibuat satu label
-    // per kolom yang berubah; yang tidak diperlukan bisa dihapus di halaman
-    // Buat Label.
+    // ---- Label otomatis untuk nomor yang BARU / rak yang PINDAH ----
+    // Nomor part berubah, atau barangnya pindah rak, berarti label fisiknya
+    // sudah tidak cocok lagi - penggantinya langsung dimasukkan ke antrean
+    // cetak. Kalau HANYA rak yang pindah (nomor part tidak berubah), tetap
+    // dibuatkan satu label supaya lokasi barunya kebagian label yang benar.
+    // Yang tidak diperlukan bisa dihapus di halaman Buat Label.
+    const rakAkhir = (hasil.item && hasil.item.lokasi) || rakBaru || itemPart.lokasi || '';
+    const nomorBerubah = [ecBaru !== ecLama ? ecBaru : null,
+                          hBaru !== hLama && hBaru ? hBaru : null].filter(Boolean);
+    if (!nomorBerubah.length && rakBaru !== rakLama){
+      nomorBerubah.push(ecBaru || ecLama);
+    }
     const labelDibuat = [];
     const gagalLabel = [];
-    const rak = (hasil.item && hasil.item.lokasi) || itemPart.lokasi || '';
-    for (const nomor of [ecBaru !== ecLama ? ecBaru : null,
-                         hBaru !== hLama && hBaru ? hBaru : null]){
-      if (!nomor) continue;
+    for (const nomor of nomorBerubah){
       try{
-        const res = await tambahLabelCetak(rak, nomor);
+        const res = await tambahLabelCetak(rakAkhir, nomor);
         labelDibuat.push(nomor + (res && res.duplikat ? ' (sudah ada)' : ''));
       }catch(e){
-        // Nomor partnya SUDAH tersimpan - kegagalan label tidak boleh
-        // terlihat seperti kegagalan penyimpanan.
+        // Datanya SUDAH tersimpan - kegagalan label tidak boleh terlihat
+        // seperti kegagalan penyimpanan.
         gagalLabel.push(nomor);
       }
     }
 
-    let pesan = '✔ Nomor part tersimpan.';
+    let pesan = '✔ Data baris tersimpan.';
     if (labelDibuat.length){
       pesan += ' Label ditambahkan ke antrean cetak: ' + escapeHtml(labelDibuat.join(', ')) + '.';
     }
@@ -1263,11 +1282,12 @@ async function simpanPart(){
     }
     tampilkanStatusMp(pesan, gagalLabel.length ? 'batas' : 'ok');
 
-    // Perbarui tampilan hasil supaya nomor barunya langsung kelihatan,
+    // Perbarui tampilan hasil supaya perubahannya langsung kelihatan,
     // tanpa harus mencari ulang.
     if (hasilTerakhir){
       const it = cariItemByRow(itemPart.row);
       if (it){
+        if (rakBaru !== rakLama) it.lokasi = rakBaru;
         if (ecBaru !== ecLama) it.partEc = ecBaru;
         if (hBaru !== hLama)   it.partHarness = hBaru;
         renderHasil(hasilTerakhir.data, hasilTerakhir.kunci);
