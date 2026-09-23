@@ -93,6 +93,46 @@
 
         @keyframes denyut-titik{ 0%,100%{ opacity:1 } 50%{ opacity:.25 } }
 
+        /* ====================== NOTIFIKASI (suara + getar + pop-up) ====================== */
+        .topbar-kanan{ display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+        .notif-settings{ display: flex; align-items: center; gap: 12px; flex-wrap: wrap; justify-content: flex-end; }
+        .notif-btn{
+            width: auto; margin: 0; padding: 7px 13px; font-size: 11.5px; font-weight: 600;
+            border-radius: 99px; border: 1px solid var(--garis-terang);
+            background: var(--kartu); color: var(--redup); cursor: pointer; transition: .2s;
+        }
+        .notif-btn:hover{ background: rgba(15,23,42,.05); }
+        .notif-btn.aktif{ color: var(--hijau); border-color: rgba(5,150,105,.35); background: rgba(5,150,105,.08); }
+        .notif-opsi{
+            display: inline-flex; align-items: center; gap: 4px; font-size: 11.5px;
+            color: var(--redup); cursor: pointer; user-select: none;
+        }
+        .notif-opsi input{ accent-color: var(--dingin); cursor: pointer; margin: 0; }
+
+        /* Kotak pop-up dalam halaman - muncul walau izin notifikasi sistem
+           belum diberikan / diblokir peramban, jadi perubahan tetap kelihatan
+           selama halaman ini sedang dibuka. */
+        #toast-container{
+            position: fixed; top: 16px; right: 16px; z-index: 9999;
+            display: flex; flex-direction: column; gap: 10px;
+            max-width: 320px; width: calc(100% - 32px); pointer-events: none;
+        }
+        .toast{
+            background: var(--kartu); border: 1px solid var(--garis-terang); border-left: 4px solid var(--dingin);
+            border-radius: 12px; padding: 10px 14px; box-shadow: 0 14px 32px rgba(15,23,42,.16);
+            font-size: 12.5px; color: var(--teks); display: flex; flex-direction: column; gap: 2px;
+            opacity: 0; transform: translateX(16px); transition: opacity .3s, transform .3s;
+            pointer-events: auto;
+        }
+        .toast.tampil{ opacity: 1; transform: translateX(0); }
+        .toast b{ font-size: 13px; }
+        .toast span{ color: var(--redup); }
+        .toast-nyala{ border-left-color: var(--dingin); }
+        .toast-mati{ border-left-color: var(--sangat-redup); }
+        .toast-online{ border-left-color: var(--hijau); }
+        .toast-offline{ border-left-color: var(--merah); }
+        .toast-baru{ border-left-color: var(--ungu); }
+
         /* ============================ RINGKASAN ============================ */
         .ringkas{
             max-width: 1280px; margin: 0 auto 26px;
@@ -403,10 +443,13 @@
         @media (max-width: 560px){
             body{ padding: 0 12px 40px; }
             .topbar{ padding: 18px 0 14px; }
+            .topbar-kanan{ align-items: flex-start; }
+            .notif-settings{ justify-content: flex-start; }
             #ac-container{ grid-template-columns: 1fr; gap: 14px; }
             .ac-card{ padding: 16px; border-radius: 16px; }
             .ac-time{ font-size: 29px; }
             h1{ font-size: 19px; }
+            #toast-container{ left: 12px; right: 12px; top: 12px; max-width: none; width: auto; }
         }
 
         /* Hormati pengguna yang mematikan animasi di sistemnya */
@@ -433,8 +476,23 @@
                 <p class="subtitle">Pantau &amp; kendalikan semua AC dari jarak jauh</p>
             </div>
         </div>
-        <div id="conn-status">Menghubungkan ke Server...</div>
+        <div class="topbar-kanan">
+            <div id="conn-status">Menghubungkan ke Server...</div>
+            <!-- Panel notifikasi: pop-up butuh izin peramban (tombol ini yang
+                 memintanya - gesture pengguna diperlukan supaya tidak diblokir),
+                 suara & getar bisa langsung dicoba tanpa izin apa pun. Tiga
+                 sakelarnya disimpan per-peramban (localStorage) supaya pilihan
+                 pengguna tidak hilang tiap buka halaman. -->
+            <div class="notif-settings">
+                <button id="notif-permintaan-btn" class="notif-btn" type="button" onclick="mintaIzinNotifikasi()">🔔 Aktifkan Notifikasi</button>
+                <label class="notif-opsi"><input type="checkbox" id="notif_suara" checked onchange="simpanPrefNotif('notif_suara', this.checked)"> Suara</label>
+                <label class="notif-opsi"><input type="checkbox" id="notif_getar" checked onchange="simpanPrefNotif('notif_getar', this.checked)"> Getar</label>
+                <label class="notif-opsi"><input type="checkbox" id="notif_popup" checked onchange="simpanPrefNotif('notif_popup', this.checked)"> Pop-up</label>
+            </div>
+        </div>
     </div>
+
+    <div id="toast-container"></div>
 
     <div class="ringkas">
         <div class="angka-box"><div class="angka" id="r_total">0</div><div class="label">Total Unit</div></div>
@@ -498,9 +556,124 @@
         }
 
         let autoSaveTimers = {};
-        let lastSeen = {}; 
-        let deviceIps = {}; 
-        let deviceTitles = {}; 
+        let lastSeen = {};
+        let deviceIps = {};
+        let deviceTitles = {};
+
+        // =====================================================================
+        //  NOTIFIKASI: SUARA + GETAR + POP-UP
+        // =====================================================================
+        // Dipanggil setiap ada PERUBAHAN nyata pada suatu alat: AC dinyalakan/
+        // dimatikan, alat online/offline, atau alat baru pertama kali melapor.
+        // Tiga saluran dipakai bersamaan karena masing-masing punya kelemahan
+        // sendiri kalau berdiri sendirian:
+        //   - Pop-up sistem (Notification API) butuh izin peramban dan tetap
+        //     kelihatan walau tab sedang tidak dilihat, tapi bisa diblokir.
+        //   - Kotak pop-up DALAM halaman (toast) tidak butuh izin apa pun,
+        //     tapi cuma kelihatan kalau tab ini sedang dibuka.
+        //   - Suara & getar menarik perhatian walau layar tidak sedang dilihat
+        //     langsung (mis. HP di saku) - getar hanya jalan di HP yang
+        //     mendukung Vibration API.
+        let notifAudioCtx = null;
+
+        function prefNotif(kunci, def) {
+            try {
+                let v = localStorage.getItem(kunci);
+                return v === null ? def : v === '1';
+            } catch (e) { return def; }
+        }
+        function simpanPrefNotif(kunci, aktif) {
+            try { localStorage.setItem(kunci, aktif ? '1' : '0'); } catch (e) {}
+        }
+        function terapkanPrefNotifKeUI() {
+            ['notif_suara', 'notif_getar', 'notif_popup'].forEach(kunci => {
+                let el = document.getElementById(kunci);
+                if (el) el.checked = prefNotif(kunci, true);
+            });
+        }
+
+        function perbaruiTombolIzin() {
+            let btn = document.getElementById('notif-permintaan-btn');
+            if (!btn) return;
+            if (!('Notification' in window)) {
+                btn.innerText = '🔕 Pop-up sistem tak didukung'; btn.disabled = true; return;
+            }
+            if (Notification.permission === 'granted') {
+                btn.innerText = '🔔 Notifikasi Aktif'; btn.classList.add('aktif');
+            } else if (Notification.permission === 'denied') {
+                btn.innerText = '🔕 Diblokir di Pengaturan Peramban'; btn.classList.remove('aktif');
+            } else {
+                btn.innerText = '🔔 Aktifkan Notifikasi'; btn.classList.remove('aktif');
+            }
+        }
+
+        function mintaIzinNotifikasi() {
+            // Diklik langsung oleh pengguna (gesture) - selain meminta izin
+            // pop-up sistem, klik ini juga "membuka kunci" AudioContext &
+            // getar di peramban yang mensyaratkan interaksi pengguna dulu.
+            bunyikanBeep();
+            getarkan();
+            if (!('Notification' in window)) { perbaruiTombolIzin(); return; }
+            if (Notification.permission === 'default') {
+                Notification.requestPermission().then(perbaruiTombolIzin);
+            } else {
+                perbaruiTombolIzin();
+            }
+        }
+
+        function bunyikanBeep() {
+            if (!prefNotif('notif_suara', true)) return;
+            try {
+                if (!notifAudioCtx) notifAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                if (notifAudioCtx.state === 'suspended') notifAudioCtx.resume();
+                const t0 = notifAudioCtx.currentTime;
+                // Dua nada pendek (bukan berkas audio eksternal) - "ting-tong" singkat
+                [[880, 0], [659, .15]].forEach(([freq, tunda]) => {
+                    let osc = notifAudioCtx.createOscillator();
+                    let gain = notifAudioCtx.createGain();
+                    osc.type = 'sine'; osc.frequency.value = freq;
+                    gain.gain.setValueAtTime(0.0001, t0 + tunda);
+                    gain.gain.exponentialRampToValueAtTime(0.22, t0 + tunda + .02);
+                    gain.gain.exponentialRampToValueAtTime(0.0001, t0 + tunda + .17);
+                    osc.connect(gain); gain.connect(notifAudioCtx.destination);
+                    osc.start(t0 + tunda); osc.stop(t0 + tunda + .19);
+                });
+            } catch (e) { /* peramban tidak mendukung Web Audio - diamkan saja */ }
+        }
+
+        function getarkan() {
+            if (!prefNotif('notif_getar', true)) return;
+            try { if (navigator.vibrate) navigator.vibrate([160, 60, 160]); } catch (e) {}
+        }
+
+        function tampilkanToast(judul, pesan, tipe) {
+            if (!prefNotif('notif_popup', true)) return;
+            let box = document.getElementById('toast-container');
+            if (!box) return;
+            let el = document.createElement('div');
+            el.className = 'toast toast-' + tipe;
+            el.innerHTML = `<b>${escHtml(judul)}</b><span>${escHtml(pesan)}</span>`;
+            box.appendChild(el);
+            requestAnimationFrame(() => el.classList.add('tampil'));
+            setTimeout(() => {
+                el.classList.remove('tampil');
+                setTimeout(() => el.remove(), 350);
+            }, 6000);
+        }
+
+        // Titik masuk tunggal dipanggil dari mana pun ada perubahan - menyalakan
+        // ketiga saluran sekaligus sesuai sakelar yang dipilih pengguna.
+        function notifikasiPerubahan(judul, pesan, tipe) {
+            tampilkanToast(judul, pesan, tipe);
+            bunyikanBeep();
+            getarkan();
+            if (prefNotif('notif_popup', true) && 'Notification' in window && Notification.permission === 'granted') {
+                try {
+                    let n = new Notification(judul, { body: pesan, tag: 'ac-' + tipe + '-' + Date.now() });
+                    setTimeout(() => n.close(), 8000);
+                } catch (e) { /* sudah tertangani lewat toast di atas */ }
+            }
+        }
 
         // Warna status koneksi diatur lewat KELAS, bukan style.background inline -
         // supaya warnanya ikut satu sumber di CSS dan tidak bertabrakan dengan tema.
@@ -581,6 +754,7 @@
                 delete deviceIps[devId];
                 delete deviceTitles[devId];
                 delete acNyala[devId];
+                delete prevLepas[devId];
                 clearTimeout(saklarTimer[devId]);
                 delete saklarTimer[devId];
                 perbaruiRingkas();
@@ -645,6 +819,8 @@
             } catch (e) { alert("❌ Gagal mengunduh: " + e.message); }
         }
 
+        let prevLepas = {};   // id -> boolean offline sebelumnya, buat deteksi TRANSISI online<->offline
+
         setInterval(() => {
             let now = Date.now();
             for (let id in lastSeen) {
@@ -666,6 +842,18 @@
                     // karena yang tampil adalah data TERAKHIR, bukan keadaan kini.
                     let ket = document.getElementById(`saklar_ket_${id}`);
                     if (ket && lepas) ket.innerText = "Alat offline — ini data terakhir";
+
+                    // Notifikasi hanya pada TRANSISI (bukan tiap centang 2 detik),
+                    // dan hanya setelah keadaan sebelumnya sudah pernah diketahui -
+                    // supaya alat yang baru pertama kali muncul tidak langsung
+                    // dianggap "online kembali".
+                    if (prevLepas[id] !== undefined && prevLepas[id] !== lepas) {
+                        let nama = deviceTitles[id] || id;
+                        notifikasiPerubahan(nama,
+                            lepas ? 'Perangkat terputus dari internet' : 'Perangkat tersambung kembali ke internet',
+                            lepas ? 'offline' : 'online');
+                    }
+                    prevLepas[id] = lepas;
                 }
             }
             perbaruiRingkas();   // hitungan online/offline ikut segar tiap 2 detik
@@ -675,7 +863,9 @@
             let container = document.getElementById("ac-container");
             let cardId = "card_" + data.id;
             let card = document.getElementById(cardId);
-            
+            let sudahAda = !!card;          // false = ini pertama kali alat ini melapor
+            let statusLama = acNyala[data.id]; // keadaan nyala/mati SEBELUM update ini
+
             // Penanganan "undefined" dan "NaN" saat offline
             let runtimeVal = data.runtime || 0;
             let h = Math.floor(runtimeVal / 60);
@@ -815,6 +1005,18 @@
             document.getElementById(`time_${data.id}`).innerText = timeStr;
             document.getElementById(`stats_${data.id}`).innerText = `Pemakaian Bulan Ini: ${runtimeStr}`;
             acNyala[data.id] = !!data.status;
+
+            // ---- Notifikasi perubahan (suara + getar + pop-up) ----
+            let namaAc = deviceTitles[data.id] || data.title || data.id;
+            if (!sudahAda) {
+                // Perangkat baru pertama kali melapor ke dashboard ini
+                notifikasiPerubahan('Perangkat baru terhubung', `${namaAc} baru saja terdeteksi.`, 'baru');
+            } else if (data.online !== false && statusLama !== undefined && statusLama !== acNyala[data.id]) {
+                // AC berpindah nyala<->mati (bukan sekadar alat baru online lalu
+                // "mati" default - syarat data.online !== false itu untuk itu)
+                notifikasiPerubahan(namaAc, acNyala[data.id] ? 'AC dinyalakan' : 'AC dimatikan', acNyala[data.id] ? 'nyala' : 'mati');
+            }
+
             renderSaklar(data.id, data.status);
             hitungJadwalAktif(data);
 
@@ -1297,6 +1499,8 @@
             document.head.appendChild(s);
         }
 
+        terapkanPrefNotifKeUI();   // pulihkan sakelar Suara/Getar/Pop-up dari kunjungan sebelumnya
+        perbaruiTombolIzin();      // tampilkan status izin pop-up sistem saat ini
         muatPaho();
     </script>
 </body>
